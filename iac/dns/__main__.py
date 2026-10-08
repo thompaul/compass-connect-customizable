@@ -25,6 +25,8 @@ def main():
     # team, in a different account, from the one running the deployment.
     delegation_provider = getconfig("delegation_provider", default="none")
     delegation_parent_zone = getconfig("delegation_parent_zone", default="")
+    # Only needed to delegate in Route53; the AWS provider has no default region.
+    aws_region = getconfig("region", "aws", default="")
 
     # Get stack reference for environment
     env_reference = get_stack_reference(module="environment", stack_name=stack_name)
@@ -38,6 +40,7 @@ def main():
         domain_name=domain_name,
         delegation_provider=delegation_provider,
         delegation_parent_zone=delegation_parent_zone or None,
+        aws_region=aws_region or None,
     )
 
 

@@ -48,7 +48,16 @@ def _delegate_in_route53(
     different account, from the one running the deployment.
     """
 
-    aws_zone = aws.route53.get_zone(name=parent_zone, private_zone=False)
+    try:
+        aws_zone = aws.route53.get_zone(name=parent_zone, private_zone=False)
+    except Exception as e:  # noqa: BLE001 - re-raised with the context the provider lacks
+        raise RuntimeError(
+            f"Could not read the Route53 zone '{parent_zone}' to delegate the subdomain: {e}\n"
+            f"  Delegating in Route53 needs AWS credentials with read and write access to that "
+            f"zone, which is often held by a different team in a different account.\n"
+            f"  To delegate by hand instead, set dns:delegation_provider to 'none'. The deploy "
+            f"will then print the NS records to create."
+        ) from e
 
     return aws.route53.Record(
         get_resource_name(resource="subdomain", resource_type="ns-record"),
@@ -77,12 +86,47 @@ def _report_manual_delegation(domain_name: pulumi.Output[str],
     pulumi.Output.all(domain_name, ns_records).apply(_report)
 
 
+def _check_delegation_config(*, delegation_provider: str,
+                             delegation_parent_zone: Optional[str],
+                             aws_region: Optional[str]) -> None:
+    """
+    Check the delegation configuration before any resource is declared.
+
+    The managed zone is created first, so a delegation problem found later leaves a zone
+    behind and an environment that is neither delegated nor clean.
+    """
+    if delegation_provider == "none":
+        return
+
+    if delegation_provider != "route53":
+        raise ValueError(
+            f"Unsupported dns:delegation_provider {delegation_provider!r}. Supported: 'none', 'route53'."
+        )
+
+    missing = []
+    if not delegation_parent_zone:
+        missing.append("dns:delegation_parent_zone (the Route53 zone holding the parent domain)")
+    if not aws_region:
+        missing.append("aws:region (the AWS provider has no default)")
+    if missing:
+        raise ValueError(
+            "dns:delegation_provider is 'route53', which also requires:\n"
+            + "".join(f"  - {m}\n" for m in missing)
+            + "  Set dns:delegation_provider to 'none' to delegate by hand instead."
+        )
+
+
 def deploy_dns(*,
                project: pulumi.Output[str],
                location: str,
                domain_name: pulumi.Output[str],
                delegation_provider: str = "none",
-               delegation_parent_zone: Optional[str] = None):
+               delegation_parent_zone: Optional[str] = None,
+               aws_region: Optional[str] = None):
+    _check_delegation_config(delegation_provider=delegation_provider,
+                             delegation_parent_zone=delegation_parent_zone,
+                             aws_region=aws_region)
+
     basic_config = get_project_base_config(project=project, location=location)
 
     # Create the DNS
@@ -95,17 +139,10 @@ def deploy_dns(*,
     # console. A rebuilt zone gets new nameservers, so this is needed on every cycle.
     pulumi.export("dns_name_servers", dns_zone.name_servers)
 
+    # Already validated above, before anything was created.
     if delegation_provider == "none":
         _report_manual_delegation(domain_name, dns_zone.name_servers)
-    elif delegation_provider == "route53":
-        if not delegation_parent_zone:
-            raise ValueError(
-                "dns:delegation_parent_zone is required when dns:delegation_provider is 'route53'"
-            )
+    else:
         _delegate_in_route53(parent_zone=delegation_parent_zone,
                              sub_domain_name=domain_name,
                              ns_records=dns_zone.name_servers)
-    else:
-        raise ValueError(
-            f"Unsupported dns:delegation_provider {delegation_provider!r}. Supported: 'none', 'route53'."
-        )
