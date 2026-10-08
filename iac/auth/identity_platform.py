@@ -436,12 +436,16 @@ def _verify_domain(credentials: Any, _project_id: str, props: dict[str, Any]):
     _custom_domain = props.get("notification", {}).get("send_email", {}).get("dns_info", {}).get("custom_domain")
     if _use_custom_domain:
         pulumi.info(f"Verifying the 'domain: {_custom_domain}' for email notifications for 'project: {_project_id}'")
-        # retry the domain verification for 10 minutes (60 seconds * 10)
-        _timeout = 300  # 5 minutes
-        _retry_interval = 10  # 10 seconds
+        # On a freshly created project the Firebase namespace this check depends on is not
+        # visible to the Identity Platform for a long time - far longer than the five minutes
+        # this used to allow. Waiting is the only remedy, so the bound is generous and
+        # overridable, and running out of it is reported as something to resume rather than
+        # as a failure.
+        _timeout = int(os.getenv("COMPASS_DOMAIN_VERIFICATION_TIMEOUT_SECS", str(30 * 60)))
+        _retry_interval = 30
         _elapsed_time = 0
         _started_at = time.time()
-        while _elapsed_time < _timeout:  # 1 minutes
+        while _elapsed_time < _timeout:
             _verification_state, _error_text = _identity_platform_verify_domain(credentials, _project_id, _custom_domain, "VERIFY")
             if _verification_state == "SUCCEEDED":
                 pulumi.info(f"Verified 'domain: {_custom_domain}' for email notifications for 'project: {_project_id}'")
@@ -450,7 +454,10 @@ def _verify_domain(credentials: Any, _project_id: str, props: dict[str, Any]):
                 _identity_platform_verify_domain(credentials, _project_id, _custom_domain, "APPLY")
                 break
 
-            if _verification_state == 'FAILED' or _error_text != "":
+            # Only a FAILED state is terminal. The service reports a transient reason alongside
+            # IN_PROGRESS while it waits for the namespace to appear; treating any reason as
+            # fatal made the loop below unreachable, so the first poll always ended the run.
+            if _verification_state == 'FAILED':
                 _err_msg = f"Failed to verify the 'domain: {_custom_domain}' for email notifications for 'project: {_project_id}', 'reason: {_error_text}'"
                 pulumi.error(_err_msg)
                 # Cancel the verification
@@ -462,13 +469,23 @@ def _verify_domain(credentials: Any, _project_id: str, props: dict[str, Any]):
                 raise DomainVerificationError(f"Unknown 'verification state:{_verification_state}' for the 'domain: {_custom_domain}' "
                                               f"for the email notifications for 'project: {_project_id}'")
 
-            pulumi.info(f"Verification for 'domain: {_custom_domain}' in progress since {_elapsed_time} for email notifications for 'project: {_project_id}'")
+            _waiting_on = f", waiting on: {_error_text}" if _error_text else ""
+            pulumi.info(f"Verification for 'domain: {_custom_domain}' in progress for "
+                        f"{int(_elapsed_time)}s of {_timeout}s for email notifications for "
+                        f"'project: {_project_id}'{_waiting_on}")
             # if the timeout is will be reached, raise an error
             if _elapsed_time + _retry_interval >= _timeout:
                 # Cancel the verification
                 pulumi.info(f"Timed out, cancelling the verification of the 'domain: {_custom_domain}' for email notifications for 'project: {_project_id}'")
                 _identity_platform_verify_domain(credentials, _project_id, _custom_domain, "CANCEL")
-                raise TimeoutError(f"Failed to verify the domain {_custom_domain} for the email notifications for project: {_project_id}")
+                raise TimeoutError(
+                    f"The domain {_custom_domain} was not verified for email notifications on "
+                    f"project {_project_id} within {_timeout}s. The last reason given was: "
+                    f"{_error_text or 'none'}. On a newly created project this is normally the "
+                    f"Firebase namespace not having propagated yet, which can take hours and "
+                    f"needs nothing done to it. Nothing else in this stack is affected - re-run "
+                    f"pulumi up on the auth module to resume, or raise "
+                    f"COMPASS_DOMAIN_VERIFICATION_TIMEOUT_SECS to wait longer in one run.")
             time.sleep(_retry_interval)
             _elapsed_time = time.time() - _started_at
 
