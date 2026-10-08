@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 import re
 import sys
 
@@ -464,3 +465,93 @@ def compare_to_template(*, template: dict, actual_cfg: dict, parent: str = "root
     except Exception as e:
         print(f"Unexpected error in compare_to_template: {e}")
         return False
+
+
+# =======================
+# Teardown
+# =======================
+
+#: Signatures of failures caused by the cloud provider still holding a resource, rather
+#: than by anything the deployment did. Cloud Run's Direct VPC egress reserves an address
+#: range inside the subnet, and releases it on its own schedule after the service is gone —
+#: measured at over an hour, with no API to query or release it. Retrying is the only
+#: remedy available, so it has to be built in rather than left to the operator.
+_PROVIDER_HELD_SIGNATURES = (
+    "resourceInUseByAnotherResource",
+    "is already being used by",
+)
+
+
+def _is_provider_held(message: str) -> bool:
+    return any(sig in message for sig in _PROVIDER_HELD_SIGNATURES)
+
+
+def get_protected_resources(stack_name: str, module: IaCModules) -> List[Mapping[str, Any]]:
+    """
+    List the resources in a stack that are marked protected.
+
+    Protection is deliberate — the CV uploads bucket holds user data and should not
+    evaporate with a destroy. But it is currently met as an error partway through a
+    teardown, after sibling resources are already gone. Surfacing it first makes it a
+    decision instead of a surprise.
+    """
+    stack_work_dir = os.path.join(iac_dir, module.value)
+    try:
+        stack = auto.create_or_select_stack(work_dir=stack_work_dir, stack_name=stack_name)
+        deployment = stack.export_stack().deployment or {}
+    except Exception as e:  # noqa: BLE001 - reporting helper, never a reason to stop
+        print(f"  warning: could not read the state of {module.value}: {e}")
+        return []
+
+    return [
+        {"urn": r.get("urn", ""), "type": r.get("type", "")}
+        for r in deployment.get("resources", [])
+        if r.get("protect")
+    ]
+
+
+def unprotect_resources(stack_name: str, module: IaCModules, urns: List[str]) -> None:
+    """Clear the protect flag on the given resources, so a destroy can remove them."""
+    stack_work_dir = os.path.join(iac_dir, module.value)
+    stack = auto.create_or_select_stack(work_dir=stack_work_dir, stack_name=stack_name)
+    deployment = stack.export_stack()
+    for resource in deployment.deployment.get("resources", []):
+        if resource.get("urn") in urns:
+            resource["protect"] = False
+            print(f"  unprotected {resource.get('urn')}")
+    stack.import_stack(deployment)
+
+
+def destroy_with_retry(stack_name: str, module: IaCModules, *,
+                       max_wait_secs: int = 150 * 60,
+                       retry_interval_secs: int = 60) -> None:
+    """
+    Destroy a module, waiting out resources the cloud provider has not released yet.
+
+    Raises on any other failure, immediately.
+    """
+    started = time.time()
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            run_pulumi_destroy(stack_name=stack_name, module=module)
+            return
+        except Exception as e:  # noqa: BLE001 - inspected and re-raised below
+            if not _is_provider_held(str(e)):
+                raise
+            elapsed = int(time.time() - started)
+            if elapsed + retry_interval_secs >= max_wait_secs:
+                raise TimeoutError(
+                    f"{module.value}: a resource is still held by the cloud provider after "
+                    f"{elapsed // 60} minutes.\n"
+                    f"  This is not a problem with the configuration, and there is no API to "
+                    f"release it. Re-running the teardown will resume from here.\n"
+                    f"  Original error: {e}"
+                ) from e
+            print(
+                f"  {module.value}: a resource is still held by the cloud provider "
+                f"({elapsed // 60}m elapsed, attempt {attempt}). This is released on the "
+                f"provider's own schedule; waiting {retry_interval_secs}s and retrying."
+            )
+            time.sleep(retry_interval_secs)

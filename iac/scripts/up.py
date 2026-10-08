@@ -18,7 +18,7 @@ iac_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, iac_dir)
 
 from environment.env_types import EnvironmentTypes
-from _types import IaCModules, Environment
+from _types import IaCModules, DEPLOY_ORDER, Environment
 from frontend.prepare_frontend import prepare_frontend
 from admin_frontend.prepare_admin_frontend import prepare_admin_frontend
 from lib import load_dot_realm_env, getenv, get_pulumi_stack_outputs, Version, clear_dot_env
@@ -142,28 +142,22 @@ def _deploy_environment(stack_name: str):
     try:
         print(f"Deploying environment: {stack_name}")
 
-        # 1. run pulumi up for the micro stacks.
-        run_pulumi_up(stack_name, IaCModules.ENVIRONMENT)
+        # 1. Deploy the modules in the declared order. Modules needing preparation or
+        #    smoke tests have a handler; the rest are a plain pulumi up.
+        _handlers = {
+            IaCModules.FRONTEND: _deploy_frontend,
+            IaCModules.ADMIN_FRONTEND: _deploy_admin_frontend,
+            IaCModules.BACKEND: _deploy_backend,
+            IaCModules.COMMON: _deploy_common,
+        }
+        for _module in DEPLOY_ORDER:
+            _handler = _handlers.get(_module)
+            if _handler is not None:
+                _handler(stack_name)
+            else:
+                run_pulumi_up(stack_name, _module)
 
-        # 1.1 Deploy the dns
-        run_pulumi_up(stack_name, IaCModules.DNS)
-
-        # 1.2 Deploy the auth
-        run_pulumi_up(stack_name, IaCModules.AUTH)
-
-        # 1.3 Deploy the frontend.
-        _deploy_frontend(stack_name)
-
-        # 1.4 Deploy the admin frontend.
-        _deploy_admin_frontend(stack_name)
-
-        # 1.5 Deploy the backend.
-        _deploy_backend(stack_name)
-
-        # 1.6 Deploy the common
-        _deploy_common(stack_name)
-
-        # 1.7 set the necessary tags to the pulumi environment, necessary for the deployment report.
+        # 2. set the necessary tags to the pulumi environment, necessary for the deployment report.
         _tag_the_environment_with_deployment_info(stack_name)
 
     except Exception as e:

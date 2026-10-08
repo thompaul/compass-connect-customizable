@@ -23,6 +23,26 @@ class IaCModules(Enum):
     COMMON = "common"
 
 
+#: The order the environment's modules are deployed in.
+#:
+#: Teardown is the reverse of this tuple rather than a second list, so the two cannot
+#: drift apart. They had: one module was missing from the teardown entirely, and two
+#: others were ordered inconsistently with the order they are created in — under a
+#: comment claiming reverse-dependency order.
+DEPLOY_ORDER: tuple["IaCModules", ...] = (
+    IaCModules.ENVIRONMENT,
+    IaCModules.DNS,
+    IaCModules.AUTH,
+    IaCModules.FRONTEND,
+    IaCModules.ADMIN_FRONTEND,
+    IaCModules.BACKEND,
+    IaCModules.COMMON,
+)
+
+#: The order the environment's modules are destroyed in: the exact reverse of DEPLOY_ORDER.
+DESTROY_ORDER: tuple["IaCModules", ...] = tuple(reversed(DEPLOY_ORDER))
+
+
 class DeploymentType(Enum):
     """
     Deployment type.
