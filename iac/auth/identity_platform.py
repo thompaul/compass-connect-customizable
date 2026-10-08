@@ -268,32 +268,78 @@ def _wait_for_update_config_to_apply(credentials: Any, project_id: str) -> dict[
         "Failed to read the apiKey, firebaseSubdomain of the the Identity Platform client within 100 seconds.")
 
 
-def _identity_platform_update_config(credentials: Any, project_id: str, cfg: dict[str, Any]) -> dict[str, Any]:
+# Fields that cannot be cleared on delete: read-only identity of the config itself.
+_DELETE_PRESERVED_KEYS = frozenset({"name", "subtype", "client", "defaultHostingSite"})
+
+
+def _build_update_mask(cfg: dict[str, Any], _prefix: str = "") -> list[str]:
+    """
+    Build a field mask naming exactly the leaves present in ``cfg``.
+
+    The API treats an absent mask as a full replacement, so any field not in the body is
+    cleared. Naming only top-level keys is not enough either: a mask of "notification"
+    with a partial notification object still clears the parts of it that were not sent —
+    which is how a request carrying only dnsInfo came to read as an instruction to clear
+    the email templates, and was refused.
+
+    Leaf paths avoid both. Sending notification.sendEmail.dnsInfo.useCustomDomain touches
+    that field and nothing else.
+    """
+    paths: list[str] = []
+    for key, value in cfg.items():
+        path = f"{_prefix}{key}"
+        if isinstance(value, dict) and value:
+            paths.extend(_build_update_mask(value, f"{path}."))
+        else:
+            # A scalar, a list, or an explicitly empty object: replaced as a whole.
+            paths.append(path)
+    return paths
+
+
+def _identity_platform_update_config(credentials: Any, project_id: str, cfg: dict[str, Any],
+                                     *,
+                                     update_mask: Optional[str] = None,
+                                     wait_for_client: bool = True) -> dict[str, Any]:
     """
     Updates the project's Identity Platform config resource.
+
+    A field mask is always sent. Without one the API replaces the whole config, so every
+    field absent from the body is cleared — including fields it then refuses to clear.
+
     :param credentials: The credentials to use for the API request
     :param project_id: The GCP project ID
     :param cfg: The Identity Platform config resource to update. It should be a dictionary with the keys in camelCase format.
                 See https://cloud.google.com/identity-platform/docs/reference/rest/v2/Config for more details.
+    :param update_mask: the mask to send. Derived from the leaves of ``cfg`` when omitted;
+                        pass it explicitly to clear fields, where the body is empty.
+    :param wait_for_client: wait for the client apiKey and firebaseSubdomain to appear.
+                            Only meaningful on the update that first creates them.
+    :raises ValueError: if no mask can be derived, rather than sending a maskless request
     :raises: HttpError if the API request fails
     """
+    if update_mask is None:
+        _paths = _build_update_mask(cfg)
+        if not _paths:
+            raise ValueError(
+                "Refusing to update the Identity Platform config with no field mask: an absent "
+                "mask replaces the entire config. Pass update_mask explicitly to clear fields."
+            )
+        update_mask = ",".join(_paths)
     # Use context manager to avoid leaving sockets open
     # https://github.com/googleapis/google-api-python-client/blob/main/docs/start.md
     with discovery.build(serviceName="identitytoolkit", version="v2", credentials=credentials) as service:
         try:
             # See https://cloud.google.com/identity-platform/docs/reference/rest/v2/projects/updateConfig
             name = f"projects/{project_id}/config"
-            # The 'updateMask' indicates which fields we want to update.
-            # An empty mask means we want to update all fields.
-            update_mask = None  # "signIn,mfa,authorizedDomains"
+            pulumi.debug(f"Updating Identity Platform config with mask: {update_mask}")
             request = service.projects().updateConfig(
                 name=name,
                 updateMask=update_mask,
                 body=cfg
             )
             response = request.execute()
-            if cfg == {}:  # If the config is empty, it means we are deleting the config
-                pulumi.info(f"Deleted Identity Platform config for project: {project_id}")
+            if not wait_for_client:
+                pulumi.info(f"Updated Identity Platform config for project: {project_id} (mask: {update_mask})")
             else:
                 # ensure the client is created successfully
                 # with all the expected properties already there.
@@ -453,18 +499,25 @@ def _apply_config(props: dict[str, Any]) -> dict[str, Any]:
     # To Convert the props to the format expected by the GCP API (camelCase keys)
     _cfg = _getconfig_for_api_body(props)
 
-    # Update the Identity Platform config and get the current config
+    # The email configuration is applied in a second phase, after the custom email domain
+    # has been verified.
+    #
+    # The templates name a custom sender (noreply@<custom domain>), and the API refuses a
+    # custom sender until that domain is verified. On a project that has never had one,
+    # sending the email configuration in the same request as everything else therefore
+    # fails — and fails before the code that was meant to recover from it had run.
+    _notification = _cfg.pop("notification", None)
+
+    # Phase 1: everything that does not depend on a verified domain.
     _current_cfg = _identity_platform_update_config(_credentials, _project_id, _cfg)
 
-    # Do the domain verification for the email notifications if needed
-    try:
+    # Phase 2: verify the domain, then apply the email configuration it gates.
+    if _notification is not None:
         _verify_domain(_credentials, _project_id, props)
-    except Exception as e:
-        pulumi.error(f"Failed to verify the domain for the email notifications: {e}")
-        pulumi.info("Reverting the Identity Platform config 'use_custom_domain: False'")
-        _cfg["notification"]["sendEmail"]["dnsInfo"]["useCustomDomain"] = False
-        _current_cfg = _identity_platform_update_config(_credentials, _project_id, _cfg)
-        raise e
+        pulumi.info(f"Applying the email notification config for project: {_project_id}")
+        _current_cfg = _identity_platform_update_config(
+            _credentials, _project_id, {"notification": _notification}, wait_for_client=False
+        )
 
     # Convert the keys to snake_case to match the input props
     _current_cfg = convert_keys_to_snake_case(_current_cfg)
@@ -507,11 +560,11 @@ class IdentityPlatformProvider(ResourceProvider):
         _callback_uri = _news.get("notification", {}).get("send_email", {}).get("callback_uri")
         _callback_hostname = urlparse(_callback_uri).hostname
         if _callback_hostname and not _use_custom_domain:
-            raise ValueError("The 'callback_uri' should be set in the 'notification_config' args "
-                             "with a valid hostname when 'use_custom_domain' is set to True.")
-        if _use_custom_domain and not _callback_hostname:
             raise ValueError("The 'callback_uri' should not be set in the 'notification_config' args "
                              "when 'use_custom_domain' is set to False.")
+        if _use_custom_domain and not _callback_hostname:
+            raise ValueError("The 'callback_uri' should be set in the 'notification_config' args "
+                             "with a valid hostname when 'use_custom_domain' is set to True.")
         # if _use_custom_domain and _callback_hostname:
         #     if not _callback_hostname.endswith(_custom_domain):
         #         raise ValueError(f"The 'callback_uri:{_callback_hostname}' hostname in the 'notification_config' args "
@@ -585,8 +638,30 @@ class IdentityPlatformProvider(ResourceProvider):
             return
 
         pulumi.info(f"IdentityPlatform config will be deleted for project: {_project_id}")
-        # Delete the Identity Platform config
-        _identity_platform_update_config(_credentials, _project_id, {})  # pass an empty config to delete the config
+
+        # Clear the configuration we manage, naming the fields explicitly.
+        #
+        # An empty body with no mask would read as "replace the whole config with nothing",
+        # which includes clearing the email templates — and the API refuses to clear those.
+        # That refusal blocked deletion of this stack, and because the stack also owns the
+        # DNS records for email, it blocked deletion of the DNS zone behind it.
+        #
+        # So clear only what can be cleared: the fields that exist now, minus the
+        # notification block and the read-only identity fields.
+        _current = _identity_platform_get_config(_credentials, _project_id) or {}
+        _clearable = [
+            key for key in _current
+            if key != "notification" and key not in _DELETE_PRESERVED_KEYS
+        ]
+        if not _clearable:
+            pulumi.info(f"Nothing clearable in the Identity Platform config for project: {_project_id}")
+            return
+
+        _identity_platform_update_config(
+            _credentials, _project_id, {},
+            update_mask=",".join(_clearable),
+            wait_for_client=False,
+        )
 
 
 # Custom Resource for Identity Platform
