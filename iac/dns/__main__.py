@@ -21,6 +21,10 @@ def main():
 
     # Get the config values
     location = getconfig("region", "gcp")
+    # Delegation is manual by default: the parent zone is usually held by a different
+    # team, in a different account, from the one running the deployment.
+    delegation_provider = getconfig("delegation_provider", default="none")
+    delegation_parent_zone = getconfig("delegation_parent_zone", default="")
 
     # Get stack reference for environment
     env_reference = get_stack_reference(module="environment", stack_name=stack_name)
@@ -32,6 +36,8 @@ def main():
         project=project,
         location=location,
         domain_name=domain_name,
+        delegation_provider=delegation_provider,
+        delegation_parent_zone=delegation_parent_zone or None,
     )
 
 

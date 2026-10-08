@@ -1,7 +1,13 @@
 dns:
   config:
     gcp:region: <region>
-    aws:region: <region>
+    # Delegation of this environment's subdomain to the zone created here.
+    #   none    (default) you create the NS records yourself; the deploy prints them
+    #   route53 the deploy creates them, and needs AWS credentials with write access
+    #           to the parent zone, plus aws:region and delegation_parent_zone
+    delegation_provider: /.*/
+    delegation_parent_zone: /.*/
+    aws:region: /.*/
 auth:
   config:
     gcp:region: <region>

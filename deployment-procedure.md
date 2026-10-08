@@ -518,7 +518,7 @@ For more details on how the script works, use the `--help` flag.
 
 ### Step 4.9: Prepare and Deploy the Environment.
 
-Authenticate to the [GCP](#how-to-authenticate-gcp) And [authenticate AWS](#how-to-authenticate-aws) Before running this script.
+Authenticate to the [GCP](#how-to-authenticate-gcp) before running this script. AWS credentials are only needed if `dns:delegation_provider` is set to `route53` — see [authenticate AWS](#how-to-authenticate-aws) and Step 4.9.1 below.
 
 Once the `setup_env.py` script is completed, the environment is ready for deployment.
 
@@ -542,6 +542,31 @@ Deployment can be done **automatically** via the GitHub pipeline (on push or rel
     ```shell
     ./scripts/up.py --help
     ```
+
+### Step 4.9.1: Delegate the subdomain.
+
+The `dns` stack creates a managed zone for this environment's subdomain. Until the parent
+domain delegates to it, nothing resolves — and **the managed TLS certificate cannot be
+issued**, so the deployment will not complete.
+
+How this happens depends on `dns:delegation_provider`:
+
+- **`none` (the default).** You create the NS records yourself at whatever holds the parent
+  domain. The `dns` deploy prints the exact records to create, and they are also available
+  afterwards:
+
+    ```shell
+    pulumi stack output dns_name_servers -C dns -s <REALM_NAME>.<ENVIRONMENT_NAME>
+    ```
+
+- **`route53`.** The deploy creates the records for you. This needs AWS credentials with
+  write access to the parent zone, plus `dns:delegation_parent_zone` and `aws:region`.
+
+> **The parent zone is often held by a different team, in a different account, from the one
+> running the deployment.** That is why delegation is manual by default.
+
+> **A rebuilt zone gets new nameservers.** If the `dns` stack is destroyed and recreated, the
+> delegation must be updated — the old records point at nameservers that no longer exist.
 
 The deployment is done in the flowing flow.
 

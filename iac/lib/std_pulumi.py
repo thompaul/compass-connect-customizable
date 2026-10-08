@@ -77,7 +77,8 @@ def getstackref(stack_ref: pulumi.StackReference, name: str, secret: bool = Fals
     return value_output
 
 
-def getconfig(name: str, config: Optional[str] = None, *, secret: bool = False) -> str:
+def getconfig(name: str, config: Optional[str] = None, *, secret: bool = False,
+              default: Optional[str] = None) -> str:
     """
     Get the configuration value from the pulumi configuration. Log the value if it is not a secret,
     otherwise log the secret value as a series of '*'
@@ -85,13 +86,18 @@ def getconfig(name: str, config: Optional[str] = None, *, secret: bool = False) 
     :param name: the configuration name
     :param config: the pulumi configuration namespace
     :param secret: whether the configuration is a secret
+    :param default: when given, the value becomes optional and falls back to this
     :return: the configuration value
-    :raises ValueError: if the configuration value is not set.
+    :raises ValueError: if the configuration value is required and not set.
     """
 
-    value = pulumi.Config(config).require(name)
-    if not value:
-        raise ValueError(f"configuration value {name} is not set")
+    if default is None:
+        value = pulumi.Config(config).require(name)
+        if not value:
+            raise ValueError(f"configuration value {name} is not set")
+    else:
+        # An explicit default makes the value optional.
+        value = pulumi.Config(config).get(name) or default
 
     key = name
     if config is not None:

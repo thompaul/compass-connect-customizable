@@ -10,7 +10,7 @@ sys.path.insert(0, libs_dir)
 import pulumi
 from deploy_aws_ns import deploy_aws_ns
 
-from lib.std_pulumi import parse_realm_env_name_from_stack, getstackref, load_dot_realm_env, get_stack_reference
+from lib.std_pulumi import parse_realm_env_name_from_stack, getstackref, load_dot_realm_env, get_stack_reference, getconfig
 
 
 def main():
@@ -27,8 +27,12 @@ def main():
     common_stack_ref = get_stack_reference(module="common", stack_name=stack_name)
     ns_records = getstackref(common_stack_ref, "ns-records")
 
+    # The Route53 zone holding the parent domain.
+    parent_zone = getconfig("delegation_parent_zone", "dns", default="")
+
     # Deploy the aws ns
     deploy_aws_ns(
+        parent_zone,
         domain_name,
         ns_records
     )
