@@ -352,10 +352,32 @@ def _export_key(*, service_account: gcp.serviceaccount.Account, key_name: str, k
     )
 
     def _handle_value(key: str):
-        with open(key_file_path, "w") as file:
-            file.write(base64.b64decode(key.strip()).decode("utf-8"))
+        write_private_key(key_file_path, base64.b64decode(key.strip()).decode("utf-8"))
 
     json_key.private_key.apply(_handle_value)
+
+
+def write_private_key(key_file_path: str, contents: str) -> None:
+    """
+    Write a service account key so only its owner can read it.
+
+    A plain ``open(path, "w")`` takes the process umask, which on a normal machine leaves
+    the file at 0644. These are live credentials to the realm's cloud, with CI/CD rights
+    over every environment in it, sitting world-readable on a laptop or a build agent.
+
+    The mode is set before any content is written, and separately from the ``os.open``
+    mode, which a pre-existing file ignores - a key re-exported over one left at 0644 by
+    an earlier run would otherwise keep the old permissions.
+    """
+    descriptor = os.open(key_file_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.chmod(key_file_path, 0o600)
+        file = os.fdopen(descriptor, "w")
+    except BaseException:
+        os.close(descriptor)
+        raise
+    with file:
+        file.write(contents)
 
 
 def _create_service_accounts(*,
@@ -390,7 +412,10 @@ def _create_service_accounts(*,
     # Export the service account key
     # Construct the path for the keys files
     keys_path = os.path.join(roots_path, "keys")
-    os.makedirs(keys_path, exist_ok=True)
+    os.makedirs(keys_path, mode=0o700, exist_ok=True)
+    # makedirs ignores the mode when the directory already exists, and the keys inside are
+    # credentials to the whole realm.
+    os.chmod(keys_path, 0o700)
 
     lower_env_service_account_key_file_name = f"/{realm_name}-lower-env-ci-cd-key.json"
     _export_key(service_account=lower_env_service_account,

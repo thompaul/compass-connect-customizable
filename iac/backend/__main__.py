@@ -114,6 +114,7 @@ def main():
         # Branding
         global_product_name=getenv("GLOBAL_PRODUCT_NAME", False, False),
         enable_cv_upload=getenv("GLOBAL_ENABLE_CV_UPLOAD", False, False),
+        disable_registration_code=getenv("GLOBAL_DISABLE_REGISTRATION_CODE", False, False),
 
         # Matching service (optional)
         matching_service_url=getenv("MATCHING_SERVICE_URL", False, False),

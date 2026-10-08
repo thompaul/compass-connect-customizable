@@ -81,6 +81,9 @@ class BackendServiceConfig:
     language_config: str
     admin_tenant_id: str
     global_product_name: Optional[str]
+    # Honoured by the backend's invitation-code validator. It was read by the application
+    # and never passed to the container, so it has been inert in every deployment that set it.
+    disable_registration_code: Optional[str]
     matching_service_url: Optional[str]
     matching_service_api_key: Optional[str]
     inline_phase_transition: Optional[str]
@@ -527,6 +530,9 @@ def _deploy_cloud_run_service(
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="GLOBAL_ENABLE_CV_UPLOAD",
                             value=backend_service_cfg.enable_cv_upload or "false"),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="GLOBAL_DISABLE_REGISTRATION_CODE",
+                            value=backend_service_cfg.disable_registration_code or "false"),
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="MATCHING_SERVICE_URL",
                             value=backend_service_cfg.matching_service_url),
