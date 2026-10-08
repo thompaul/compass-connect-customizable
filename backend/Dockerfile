@@ -11,6 +11,19 @@ COPY ./pyproject.toml ./README.md ./poetry.lock* ./
 
 RUN poetry install --no-interaction --no-ansi --no-root --without dev
 
+# Generate the offline preference-elicitation vignettes.
+#
+# This is deterministic computation over a configuration file that is committed,
+# taking ~30s. It is generated here rather than committed so the output cannot
+# drift from the parameters that produced it, and so a clean clone builds without
+# a prior CI run — previously this directory was neither tracked nor ignored, and
+# the documented manual build could not work.
+COPY ./app/agent/preference_elicitation_agent/offline_optimization ./offline_optimization
+RUN cd offline_optimization \
+    && python run_offline_optimization.py \
+         --output-dir /offline_output \
+         --config preference_parameters.json
+
 ## Second stage to build the final image with a smaller image size
 
 # Using alpine image to reduce the image size further
@@ -26,7 +39,7 @@ WORKDIR /code
 COPY ./app ./app
 COPY ./features ./features
 COPY ./common_libs ./common_libs
-COPY ./offline_output ./offline_output
+COPY --from=builder /offline_output ./offline_output
 
 EXPOSE 8080
 
