@@ -150,6 +150,7 @@ config:
   gcp_root_folder_id: "<root_folder_id>"  # Root folder ID. Use the one from Step 1.3
   gcp_root_project_id: "<root_project_id>"  # Root project ID. Use the one from Step 1.5
   base_domain_name: "<base_domain_name>"  # Base domain (e.g., tabiya.tech). It must be the top level domain.
+  gcp_workspace_domain: "<workspace_domain>"  # Google Workspace domain the realm's Cloud Identity groups are created in (e.g., example.org). It must belong to the customer in gcp_customer_id.
   gcp_upper_env_google_oauth_projects_folder_id: "<upper_env_google_oauth_projects_folder_id>"  # Folder ID for upper environment google oauth projects. Use the one from Step 1.4.
   gcp_lower_env_google_oauth_projects_folder_id: "<lower_env_google_oauth_projects_folder_id>"  # Folder ID for lower environment google oauth projects. Use the one from Step 1.4.
 ```

@@ -35,6 +35,9 @@ def main():
     upper_env_google_oauth_projects_folder_id = getconfig("gcp_upper_env_google_oauth_projects_folder_id")
     lower_env_google_oauth_projects_folder_id = getconfig("gcp_lower_env_google_oauth_projects_folder_id")
     base_domain_name = getconfig("base_domain_name")
+    # The Workspace domain the realm's Cloud Identity groups are created in.
+    # Must belong to the Workspace customer identified by gcp_customer_id.
+    workspace_domain = getconfig("gcp_workspace_domain")
 
     # Export the realm config so that it can be referenced in downstream stacks.
     pulumi.export("customer_id", customer_id)
@@ -43,6 +46,7 @@ def main():
     pulumi.export("root_folder_id", root_folder_id)
     pulumi.export("root_project_id", root_project_id)
     pulumi.export("base_domain_name", base_domain_name)
+    pulumi.export("workspace_domain", workspace_domain)
 
     # Create the realm
     create_realm(
@@ -51,6 +55,7 @@ def main():
         customer_id=customer_id,
         billing_account_id=billing_account_id,
         realm_name=realm_name,
+        workspace_domain=workspace_domain,
         root_folder_id=root_folder_id,
         root_project_id=root_project_id,
         upper_env_google_oauth_projects_folder_id=upper_env_google_oauth_projects_folder_id,

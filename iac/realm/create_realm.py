@@ -261,7 +261,7 @@ def _create_organizational_base(*,
         description="Developers have read-write access to lower and read-only access to production environments",
         display_name=f"{realm_name}-developers",
         group_key=gcp.cloudidentity.GroupGroupKeyArgs(
-            id=f"{realm_name}.developers@tabiya.org",
+            id=f"{realm_name}.developers@{workspace_domain}",
         ),
         labels={
             "cloudidentity.googleapis.com/groups.discussion_forum": "",
@@ -275,7 +275,7 @@ def _create_organizational_base(*,
         description="Admins have write access to both lower and production environments",
         display_name=f"{realm_name}-admins",
         group_key=gcp.cloudidentity.GroupGroupKeyArgs(
-            id=f"{realm_name}.admins@tabiya.org",
+            id=f"{realm_name}.admins@{workspace_domain}",
         ),
         labels={
             "cloudidentity.googleapis.com/groups.discussion_forum": "",
@@ -470,6 +470,51 @@ def _enable_required_services(*, provider: gcp.Provider) -> time.Sleep:
     )
 
 
+def _check_workspace_domain(*, customer_id: str, workspace_domain: str) -> None:
+    """
+    Confirm the Workspace domain looks usable before any resource is declared.
+
+    Cloud Identity groups can only be created in a domain belonging to the Workspace
+    customer that owns the realm. Groups are created late in the apply, so getting this
+    wrong previously failed after the folder tree existed — leaving a realm that was
+    neither built nor absent.
+
+    The check is advisory on purpose. If the Directory API cannot be reached, or the
+    deploying identity lacks the scope to read domains, it warns and continues: refusing
+    to deploy because a *validation* could not run would be worse than the failure it
+    guards against. It fails only when the API answers and the domain is genuinely not
+    one of the customer's.
+    """
+    if not workspace_domain or "." not in workspace_domain or "@" in workspace_domain:
+        raise ValueError(
+            f"gcp_workspace_domain must be a bare domain such as 'example.org', got {workspace_domain!r}"
+        )
+
+    try:
+        import google.auth
+        from googleapiclient import discovery
+
+        credentials, _ = google.auth.default()
+        service = discovery.build("admin", "directory_v1", credentials=credentials)
+        response = service.domains().list(customer=customer_id).execute()
+        domains = [d["domainName"].lower() for d in response.get("domains", []) if d.get("domainName")]
+    except Exception as e:  # noqa: BLE001 - advisory check, see docstring
+        pulumi.warn(
+            f"Could not verify that '{workspace_domain}' belongs to Workspace customer {customer_id}: {e}. "
+            f"Continuing. If the domain is wrong, group creation will fail later in the apply."
+        )
+        return
+
+    if workspace_domain.lower() not in domains:
+        raise ValueError(
+            f"Workspace domain '{workspace_domain}' does not belong to customer {customer_id}. "
+            f"Domains available to this customer: {', '.join(domains) or '(none returned)'}. "
+            f"Cloud Identity groups cannot be created in another customer's domain."
+        )
+
+    pulumi.info(f"Using Workspace domain: {workspace_domain}")
+
+
 def create_realm(*,
                  organization_id: str,
                  customer_id: str,
@@ -480,8 +525,14 @@ def create_realm(*,
                  lower_env_google_oauth_projects_folder_id: str,
                  region: str,
                  realm_name: str,
+                 workspace_domain: str,
                  roots_path: str
                  ) -> None:
+    # Check the Workspace domain before declaring anything. Groups are created late in
+    # the apply, so a domain that does not belong to this customer would otherwise fail
+    # after the folder tree already exists, leaving a half-built realm.
+    _check_workspace_domain(customer_id=customer_id, workspace_domain=workspace_domain)
+
     # Set the provider to use the root project
     provider = gcp.Provider(
         "gcp_provider",
