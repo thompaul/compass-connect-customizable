@@ -26,6 +26,31 @@ class ProjectBaseConfig:
     provider: gcp.Provider
 
 
+def get_stack_reference(*, module: str, stack_name: str) -> pulumi.StackReference:
+    """
+    Build a reference to another stack belonging to this deployment.
+
+    Every stack of a deployment is created in the same Pulumi organisation, so the
+    organisation is taken from the stack currently being deployed rather than configured.
+    A partner running their own deployment therefore needs to set nothing: their stacks
+    resolve within their own organisation.
+
+    ``COMPASS_PULUMI_ORGANIZATION`` overrides it, for the unusual case of referencing
+    stacks held somewhere other than the current organisation.
+
+    :param module: the IaC module being referenced, e.g. "environment", "dns"
+    :param stack_name: the stack to reference, e.g. "myrealm.prod"
+    :return: the stack reference
+    """
+    organization = os.getenv("COMPASS_PULUMI_ORGANIZATION") or pulumi.get_organization()
+    # Module names are underscore-style (matching IaCModules and the directory layout);
+    # Pulumi project names are hyphenated, e.g. admin_frontend -> compass-admin-frontend.
+    project = f"compass-{module.replace('_', '-')}"
+    reference = f"{organization}/{project}/{stack_name}"
+    pulumi.log.info(f"Referencing stack: {reference}")
+    return pulumi.StackReference(reference)
+
+
 def getstackref(stack_ref: pulumi.StackReference, name: str, secret: bool = False) -> pulumi.Output[Any]:
     """
     Get the stack reference value. Log the value if it is not a secret,

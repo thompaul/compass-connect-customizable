@@ -10,7 +10,7 @@ libs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, libs_dir)
 
 import pulumi
-from lib import getconfig, getstackref, parse_realm_env_name_from_stack
+from lib import getconfig, getstackref, parse_realm_env_name_from_stack, get_stack_reference
 from create_new_environment import create_new_environment
 
 
@@ -28,7 +28,7 @@ def main():
     pulumi.info(f'Creating environment:{environment_name} with type:{environment_type} in realm:{realm_name}')
 
     # Get realm stack references
-    realm_reference = pulumi.StackReference(f"tabiya-tech/compass-realm/{realm_name}")
+    realm_reference = get_stack_reference(module="realm", stack_name=realm_name)
 
     billing_account = getstackref(realm_reference, "billing_account_id", True)
     root_project_id = getstackref(realm_reference, "root_project_id")

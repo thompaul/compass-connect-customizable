@@ -10,7 +10,7 @@ sys.path.insert(0, libs_dir)
 import pulumi
 from deploy_dns import deploy_dns
 
-from lib.std_pulumi import getconfig, getstackref, parse_realm_env_name_from_stack, load_dot_realm_env
+from lib.std_pulumi import getconfig, getstackref, parse_realm_env_name_from_stack, load_dot_realm_env, get_stack_reference
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
     location = getconfig("region", "gcp")
 
     # Get stack reference for environment
-    env_reference = pulumi.StackReference(f"tabiya-tech/compass-environment/{stack_name}")
+    env_reference = get_stack_reference(module="environment", stack_name=stack_name)
     project = getstackref(env_reference, "project_id")
     domain_name = getstackref(env_reference, "domain_name")
 

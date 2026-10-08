@@ -11,7 +11,7 @@ sys.path.insert(0, libs_dir)
 import pulumi
 from setup_identity_platform import deploy_auth
 
-from lib.std_pulumi import load_dot_realm_env, getenv, getstackref, getconfig, parse_realm_env_name_from_stack
+from lib.std_pulumi import load_dot_realm_env, getenv, getstackref, getconfig, parse_realm_env_name_from_stack, get_stack_reference
 
 
 def main():
@@ -24,7 +24,7 @@ def main():
     app_name = getconfig(name="app_name")
 
     # Get stack reference for environment
-    env_reference = pulumi.StackReference(f"tabiya-tech/compass-environment/{stack_name}")
+    env_reference = get_stack_reference(module="environment", stack_name=stack_name)
     environment_type = getstackref(env_reference, "environment_type")
     project_id = getstackref(env_reference, "project_id")
     domain_name = getstackref(env_reference, "domain_name")
@@ -32,7 +32,7 @@ def main():
     frontend_domain = getstackref(env_reference, "frontend_domain")
 
     # Get stack reference for dns
-    dns_stack_ref = pulumi.StackReference(f"tabiya-tech/compass-dns/{stack_name}")
+    dns_stack_ref = get_stack_reference(module="dns", stack_name=stack_name)
     dns_zone_name = getstackref(dns_stack_ref, "dns_zone_name")
 
     # Get environment variables

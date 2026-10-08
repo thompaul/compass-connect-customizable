@@ -10,7 +10,7 @@ sys.path.insert(0, libs_dir)
 import pulumi
 from deploy_aws_ns import deploy_aws_ns
 
-from lib.std_pulumi import parse_realm_env_name_from_stack, getstackref, load_dot_realm_env
+from lib.std_pulumi import parse_realm_env_name_from_stack, getstackref, load_dot_realm_env, get_stack_reference
 
 
 def main():
@@ -20,11 +20,11 @@ def main():
     load_dot_realm_env(stack_name)
 
     # get stack reference to the environment
-    env_reference = pulumi.StackReference(f"tabiya-tech/compass-environment/{stack_name}")
+    env_reference = get_stack_reference(module="environment", stack_name=stack_name)
     domain_name = getstackref(env_reference, "domain_name")
 
     # get stack reference to the common stack
-    common_stack_ref = pulumi.StackReference(f"tabiya-tech/compass-common/{stack_name}")
+    common_stack_ref = get_stack_reference(module="common", stack_name=stack_name)
     ns_records = getstackref(common_stack_ref, "ns-records")
 
     # Deploy the aws ns

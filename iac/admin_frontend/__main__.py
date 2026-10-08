@@ -12,7 +12,7 @@ sys.path.insert(0, libs_dir)
 from deploy_admin_frontend import deploy_admin_frontend
 from scripts.formatters import construct_artifacts_version
 from lib import getconfig, parse_realm_env_name_from_stack, getstackref, load_dot_realm_env, getenv, \
-    construct_artifacts_dir, Version
+    construct_artifacts_dir, Version, get_stack_reference
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     pulumi.info(f'Using location:{location}')
 
     # get stack reference
-    env_reference = pulumi.StackReference(f"tabiya-tech/compass-environment/{stack_name}")
+    env_reference = get_stack_reference(module="environment", stack_name=stack_name)
     project = getstackref(env_reference, "project_id")
 
     # the artifacts version of the admin frontend build to deploy.

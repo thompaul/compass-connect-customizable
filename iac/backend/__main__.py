@@ -9,7 +9,7 @@ libs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, libs_dir)
 
 from deploy_backend import deploy_backend, BackendServiceConfig
-from lib import getconfig, getstackref, getenv, parse_realm_env_name_from_stack, load_dot_realm_env, Version
+from lib import getconfig, getstackref, getenv, parse_realm_env_name_from_stack, load_dot_realm_env, Version, get_stack_reference
 
 
 def main():
@@ -35,7 +35,7 @@ def main():
     api_gateway_rate_limit: str = str(getconfig("rate_limit", "api_gateway"))
 
     # Get stack references
-    env_reference = pulumi.StackReference(f"tabiya-tech/compass-environment/{stack_name}")
+    env_reference = get_stack_reference(module="environment", stack_name=stack_name)
     docker_repository = getstackref(env_reference, "docker_repository")
     project = getstackref(env_reference, "project_id")
     project_number = getstackref(env_reference, "project_number")
