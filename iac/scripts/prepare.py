@@ -27,7 +27,8 @@ from scripts.formatters import construct_artifacts_version
 from lib import get_pulumi_stack_outputs, MAIN_SECRET_VERSION, construct_artifacts_dir, \
     download_generic_artifacts_file, get_file_as_string, Version
 from _common import add_select_environments_arguments, write_config_to_pulumi_yaml_file, \
-    get_environment_stack_configurations, get_environment_environment_variables, compare_to_template, find_environments
+    get_environment_stack_configurations, get_environment_environment_variables, compare_to_template, \
+    collect_template_problems, find_placeholder_values, report_problems, find_environments
 
 
 base_templates_dir = os.path.join(iac_folder, "templates")
@@ -132,7 +133,8 @@ def _prepare_env_file(
 def _prepare_environment_deployment(*,
                                     environment: Environment,
                                     deployment_run_number: str,
-                                    artifacts_version: Version):
+                                    artifacts_version: Version,
+                                    skip_validation: bool = False):
     """
     Prepares the deployment of an environment
      -> creating the required yaml files for the environment in the sub iac-projects,
@@ -164,20 +166,29 @@ def _prepare_environment_deployment(*,
     stack_config_template_value = get_file_as_string(os.path.join(base_templates_dir, "stack_config.template.yaml"))
     stack_config_template = yaml.safe_load(stack_config_template_value)
 
+    # Validate both configurations together and report everything at once. They used to be
+    # checked one after the other, each stopping at its first fault, so an operator filling
+    # these in for the first time learned about one missing value per attempt - and each
+    # attempt is a round trip through the secret manager.
+    #
     # Do not use strict comparison to allow for additional keys in the actual configs (stack config and env).
     # Preventing new keys can hinder development. If a required key is missing from the environment secrets or stack config,
     # deployments may break when merging the code that introduces it.
     # Additionally, if a developer adds the key before merging, it could block other code from being merged until their changes are included,
     # creating unnecessary pressure.
-    if not compare_to_template(template=stack_config_template, actual_cfg=stack_configs.raw_config):
-        raise ValueError("The stack config template is not a subset of the actual stack config.")
+    if skip_validation:
+        print("warning: skipping configuration validation (--skip-validation). An invalid "
+              "value will surface as a cloud failure partway through the deployment instead.")
     else:
-        print("info: stack config template matches the actual stack config.")
+        problems = collect_template_problems(
+            template=stack_config_template, actual_cfg=stack_configs.raw_config, parent="stack config")
+        problems += collect_template_problems(
+            template=env_vars_template, actual_cfg=env_values, parent="env")
+        problems += find_placeholder_values(env_values, label="env")
 
-    if not compare_to_template(template=env_vars_template, actual_cfg=env_values):
-        raise ValueError("The env vars template is not a subset of the actual env vars.")
-    else:
-        print("info: env vars template matches the actual env vars.")
+        if not report_problems(problems, subject=f"the configuration for {environment.stack_name}"):
+            raise ValueError(
+                f"The configuration for {environment.stack_name} is not deployable - see the problems above.")
 
     # 2. Save the modules yaml configs.
     write_config_to_pulumi_yaml_file(
@@ -218,7 +229,8 @@ def _prepare_environment_deployment(*,
     print(f"Environment deployment prepared: {environment.stack_name}")
 
 
-def _main(*, realm_name: str, env_name: str, env_type: EnvironmentTypes, target_git_branch: str, target_git_sha: str):
+def _main(*, realm_name: str, env_name: str, env_type: EnvironmentTypes, target_git_branch: str,
+          target_git_sha: str, skip_validation: bool = False):
     # get all the required stacks to prepare matching the criteria.
 
     # Get the environments that match the selection criteria.
@@ -250,7 +262,8 @@ def _main(*, realm_name: str, env_name: str, env_type: EnvironmentTypes, target_
         _prepare_environment_deployment(
             environment=environment,
             deployment_run_number=deployment_number,
-            artifacts_version=target_version)
+            artifacts_version=target_version,
+            skip_validation=skip_validation)
 
 
 if __name__ == "__main__":
@@ -285,9 +298,18 @@ if __name__ == "__main__":
         required=True,
         help="The target git sha"
     )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Do not validate the configuration against the templates.\n"
+             "For working offline only: an invalid value then surfaces as a cloud failure\n"
+             "partway through the deployment rather than here, in seconds."
+    )
+
     args = parser.parse_args()
     _main(realm_name=args.realm_name,
           env_name=args.env_name,
           env_type=args.env_type,
           target_git_branch=args.target_git_branch,
-          target_git_sha=args.target_git_sha)
+          target_git_sha=args.target_git_sha,
+          skip_validation=args.skip_validation)

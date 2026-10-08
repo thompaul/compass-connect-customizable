@@ -405,66 +405,116 @@ def _is_regex(template_value: str):
     return template_value.startswith("/") and template_value.endswith("/")
 
 
-def compare_to_template(*, template: dict, actual_cfg: dict, parent: str = "root", strict: bool = False) -> bool:
+#: A value left as a placeholder rather than filled in. The templates mark these with
+#: angle brackets - <MONGODB_URI>, and also <True/False> - and the worked examples in
+#: circulation use __NAME__. Any of them reaching a deployment means a value was never
+#: supplied, which is worth saying by name rather than letting it fail later as an
+#: authentication error against a host called "<MONGODB_URI>".
+#:
+#: Deliberately anything bracketed without whitespace, not just capitals, because half the
+#: template's markers are not capitals. Checked against a working configuration for false
+#: positives: a real value is not bracketed end to end.
+_PLACEHOLDER = re.compile(r"^\s*(<[^<>\s]+>|__[A-Za-z0-9_]+__)\s*$")
+
+
+def find_placeholder_values(cfg: Mapping[str, Any], *, label: str = "env") -> List[str]:
+    """Name every value that is still a placeholder."""
+    return [
+        f"{label}.{key} is still the placeholder {value.strip()} - supply a real value"
+        for key, value in cfg.items()
+        if isinstance(value, str) and _PLACEHOLDER.match(value)
+    ]
+
+
+def collect_template_problems(*, template: dict, actual_cfg: dict, parent: str = "root",
+                              strict: bool = False) -> List[str]:
     """
-    Compare the keys of the template dict with the actual_cfg dict.
+    Every way ``actual_cfg`` fails to satisfy ``template``, not just the first.
 
-    - If `actual_cfg` contains extra keys, they are logged as warnings.
-    - If `actual_cfg` is missing keys present in `template`, the function returns `False`.
-    - If a value in `template` is a dictionary, its corresponding value in `actual_cfg` must also be a dictionary.
-    - The function recursively verifies nested dictionaries.
-    - If `strict=True`, the presence of extra keys in `actual_cfg` will cause failure.
-    - if the template value is between / and / then we validate regex considering /.*/ means optional value.
+    Reporting one problem per run makes supplying a configuration a guessing game: each
+    correction reveals the next fault, and each round trip costs a deployment. An
+    operator filling this in for the first time needs the whole list.
 
-    :param template: The template dictionary (expected structure).
-    :param actual_cfg: The actual configuration dictionary.
-    :param parent: The parent key path (used for logging).
-    :param strict: If True, extra keys in `actual_cfg` will cause failure.
-    :return: True if `actual_cfg` matches the template (or is a superset if strict=False), otherwise False.
+    The rules are unchanged. A template value between slashes is a regex the actual value
+    must match, with ``/.*/`` meaning optional; anything else is required and must be
+    non-empty. Nested dictionaries recurse. Extra keys are a warning, or a problem under
+    ``strict``.
     """
+    problems: List[str] = []
 
-    try:
-        # Check for missing keys
-        for key, template_value in template.items():
-            actual_value = actual_cfg.get(key, "")
-            if isinstance(template_value, str) and _is_regex(template_value):
-                # When extracting the regex pattern, include all flags
-                # So that we can support multi-line regex patterns.
-                regex_pattern = re.compile(template_value[1:-1], re.DOTALL)  # Extract regex pattern
+    for key, template_value in template.items():
+        actual_value = actual_cfg.get(key, "")
+
+        if isinstance(template_value, dict):
+            if not isinstance(actual_value, dict):
+                problems.append(f"{parent}.{key} should be a group of settings but is not")
+                continue
+            problems.extend(collect_template_problems(
+                template=template_value, actual_cfg=actual_value,
+                parent=f"{parent}.{key}", strict=strict))
+            continue
+
+        if isinstance(template_value, str):
+            if _is_regex(template_value):
+                pattern = re.compile(template_value[1:-1], re.DOTALL)
             else:
-                # otherwise it is required,
-                # At least one character, including new lines support.
-                regex_pattern = r"[\s\S]+"
+                # Required: at least one character, newlines included.
+                pattern = re.compile(r"[\s\S]+")
+            if not re.fullmatch(pattern, str(actual_value)):
+                if str(actual_value) == "":
+                    problems.append(f"{parent}.{key} is required but has no value")
+                else:
+                    problems.append(
+                        f"{parent}.{key} is {actual_value!r}, which does not match "
+                        f"{pattern.pattern!r}")
 
-            if isinstance(template_value, dict):
-                if not isinstance(actual_cfg[key], dict):
-                    print(f"Error: {parent}.{key} should be a dictionary in actual_cfg but is not.")
-                    return False
-                if not compare_to_template(template=template_value, actual_cfg=actual_cfg[key], parent=f"{parent}.{key}", strict=strict):
-                    return False
-
-            # Handle regex validation
-            elif isinstance(template_value, str):
-                if not re.fullmatch(regex_pattern, str(actual_value)):
-                    print(f"Error: {parent}.{key} ({actual_value}) does not match the expected pattern {regex_pattern}.")
-                    return False
-
-        # Check for extra keys if strict mode is enabled
+    for key in actual_cfg:
+        if key in template:
+            continue
         if strict:
-            for key in actual_cfg:
-                if key not in template:
-                    print(f"Strict mode Error: {parent}.{key} is not in the template configuration.")
-                    return False
+            problems.append(f"{parent}.{key} is not in the template configuration")
         else:
-            for key in actual_cfg:
-                if key not in template:
-                    print(f"Warning: {parent}.{key} is not in the template configuration.")
+            print(f"warning: {parent}.{key} is not in the template configuration")
 
+    return problems
+
+
+def report_problems(problems: List[str], *, subject: str) -> bool:
+    """
+    Print every problem found, and say whether there were none.
+
+    Returns True when the configuration is usable.
+    """
+    if not problems:
+        print(f"info: {subject} is valid.")
         return True
 
-    except Exception as e:
-        print(f"Unexpected error in compare_to_template: {e}")
+    print(f"\nerror: {subject} has {len(problems)} problem"
+          f"{'' if len(problems) == 1 else 's'}:\n")
+    for problem in problems:
+        print(f"  - {problem}")
+    print("\nNothing has been deployed. Correct these and re-run.\n")
+    return False
+
+
+def compare_to_template(*, template: dict, actual_cfg: dict, parent: str = "root", strict: bool = False) -> bool:
+    """
+    Whether ``actual_cfg`` satisfies ``template``, reporting everything that does not.
+
+    Kept for call sites that only need a yes or no; use ``collect_template_problems``
+    when the caller wants to group problems from several sources into one report.
+    """
+    try:
+        problems = collect_template_problems(
+            template=template, actual_cfg=actual_cfg, parent=parent, strict=strict)
+    except Exception as e:  # noqa: BLE001 - a validator must not be the thing that crashes
+        print(f"error: could not validate the configuration: {e}")
         return False
+
+    for problem in problems:
+        print(f"error: {problem}")
+    return not problems
+
 
 
 # =======================
