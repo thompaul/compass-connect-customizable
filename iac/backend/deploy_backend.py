@@ -79,7 +79,7 @@ class BackendServiceConfig:
     cv_rate_limit_per_minute: Optional[str]
     enable_cv_upload: Optional[str]
     language_config: str
-    admin_tenant_id: str
+    admin_tenant_id: Optional[str]
     global_product_name: Optional[str]
     # Honoured by the backend's invitation-code validator. It was read by the application
     # and never passed to the container, so it has been inert in every deployment that set it.

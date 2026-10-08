@@ -104,8 +104,11 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
         :param stack_name: The name of the Pulumi stack.
     """
     # Admin frontend Firebase authentication (manually created, passed via env vars)
-    admin_firebase_api_key: str = getenv("ADMIN_FRONTEND_FIREBASE_API_KEY", False, True)
-    admin_firebase_auth_domain: str = getenv("ADMIN_FRONTEND_FIREBASE_AUTH_DOMAIN", False, True)
+    # Optional: the admin panel is out of phase-1 scope because the Identity Platform
+    # tenant it signs in against is neither created by the IaC nor documented anywhere.
+    # Requiring these only produced placeholder words in deployment configurations.
+    admin_firebase_api_key: Optional[str] = getenv("ADMIN_FRONTEND_FIREBASE_API_KEY", False, False)
+    admin_firebase_auth_domain: Optional[str] = getenv("ADMIN_FRONTEND_FIREBASE_AUTH_DOMAIN", False, False)
     admin_firebase_tenant_id: Optional[str] = getenv("ADMIN_FRONTEND_FIREBASE_TENANT_ID", False, False)
 
     # Sentry configuration
