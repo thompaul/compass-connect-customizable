@@ -29,6 +29,7 @@ from lib import get_pulumi_stack_outputs, MAIN_SECRET_VERSION, construct_artifac
 from _common import add_select_environments_arguments, write_config_to_pulumi_yaml_file, \
     get_environment_stack_configurations, get_environment_environment_variables, compare_to_template, \
     collect_template_problems, find_placeholder_values, report_problems, find_environments
+from _preflight import run_live_checks
 
 
 base_templates_dir = os.path.join(iac_folder, "templates")
@@ -186,6 +187,12 @@ def _prepare_environment_deployment(*,
             template=env_vars_template, actual_cfg=env_values, parent="env")
         problems += find_placeholder_values(env_values, label="env")
 
+        # Only reach for the databases once the values themselves look sane; connecting
+        # with a placeholder for a hostname produces a worse message than naming it did.
+        if not problems:
+            print("info: checking the databases and the taxonomy model...")
+            problems += run_live_checks(env_values)
+
         if not report_problems(problems, subject=f"the configuration for {environment.stack_name}"):
             raise ValueError(
                 f"The configuration for {environment.stack_name} is not deployable - see the problems above.")
@@ -301,7 +308,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--skip-validation",
         action="store_true",
-        help="Do not validate the configuration against the templates.\n"
+        help="Do not validate the configuration, and do not open the databases it names.\n"
              "For working offline only: an invalid value then surfaces as a cloud failure\n"
              "partway through the deployment rather than here, in seconds."
     )
