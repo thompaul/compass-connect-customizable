@@ -1,4 +1,6 @@
-from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
+from common_libs.database.utils import open_mongo_client
 
 
 def get_mongo_db_connection(mongo_db_uri: str, db_name: str ) -> AsyncIOMotorDatabase:
@@ -10,5 +12,5 @@ def get_mongo_db_connection(mongo_db_uri: str, db_name: str ) -> AsyncIOMotorDat
     :return: An instance of AsyncIOMotorDatabase connected to the specified database.
     """
 
-    return AsyncIOMotorClient(mongo_db_uri,
-                               tlsAllowInvalidCertificates=True).get_database(db_name)
+    return open_mongo_client(mongo_db_uri,
+                             tlsAllowInvalidCertificates=True).get_database(db_name)

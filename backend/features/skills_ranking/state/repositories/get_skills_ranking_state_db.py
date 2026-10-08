@@ -6,7 +6,7 @@ from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from common_libs.database.get_mongo_db_connection import get_mongo_db_connection
-from common_libs.database.utils import get_database_connection_info, check_mongo_health, initialize_mongo_db_indexes
+from common_libs.database.utils import get_database_connection_info, require_healthy_database, initialize_mongo_db_indexes
 from features.skills_ranking.config import get_skills_ranking_config
 
 # Global variables for singleton pattern
@@ -29,15 +29,14 @@ async def get_skills_ranking_state_db(mongo_db_uri: str = Depends(lambda: get_sk
         async with _lock:
             if _skills_ranking_mongo_db is None:
                 _logger.info("Connecting to Skills Ranking MongoDB")
-                _skills_ranking_mongo_db = get_mongo_db_connection(mongo_db_uri, database_name)
+                database = get_mongo_db_connection(mongo_db_uri, database_name)
+
+                await require_healthy_database(database, label="Skills Ranking",
+                                               mongodb_uri=mongo_db_uri, logger=_logger)
 
                 _logger.info("Connected to Skills Ranking MongoDB database: %s",
-                             await get_database_connection_info(_skills_ranking_mongo_db))
-
-                if not await check_mongo_health(_skills_ranking_mongo_db.client):
-                    raise RuntimeError("MongoDB health check failed for Skills Ranking database")
-
-                _logger.info("Successfully pinged Skills Ranking MongoDB")
+                             await get_database_connection_info(database))
+                _skills_ranking_mongo_db = database
 
     return _skills_ranking_mongo_db
 

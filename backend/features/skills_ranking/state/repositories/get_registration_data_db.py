@@ -5,7 +5,7 @@ from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from common_libs.database.get_mongo_db_connection import get_mongo_db_connection
-from common_libs.database.utils import get_database_connection_info, check_mongo_health
+from common_libs.database.utils import get_database_connection_info, require_healthy_database
 from features.skills_ranking.config import get_skills_ranking_config
 
 _registration_data_db_singleton: AsyncIOMotorDatabase | None = None
@@ -30,13 +30,13 @@ async def get_registration_data_db(
                 _logger.info("Connecting to Registration Data MongoDB")
 
                 # Create the database instance
-                _registration_data_db_singleton = get_mongo_db_connection(mongo_db_uri, database_name)
+                database = get_mongo_db_connection(mongo_db_uri, database_name)
+
+                await require_healthy_database(database, label="Registration Data",
+                                               mongodb_uri=mongo_db_uri, logger=_logger)
 
                 _logger.info("Connected to Registration Data database: %s",
-                             await get_database_connection_info(_registration_data_db_singleton))
-                if not await check_mongo_health(_registration_data_db_singleton.client):
-                    raise RuntimeError("MongoDB health check failed for Registration Data database")
-
-                _logger.info("Successfully pinged Registration Data MongoDB")
+                             await get_database_connection_info(database))
+                _registration_data_db_singleton = database
 
     return _registration_data_db_singleton

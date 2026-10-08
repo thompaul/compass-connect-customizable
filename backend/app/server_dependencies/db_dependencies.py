@@ -4,39 +4,11 @@ from typing import Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
+from common_libs.database.utils import (get_database_connection_info, open_mongo_client,
+                                        require_healthy_database)
 from common_libs.environment_settings.mongo_db_settings import MongoDbSettings
 from app.app_config import get_application_config
 from .database_collections import Collections
-
-
-async def _get_database_connection_info(database: AsyncIOMotorDatabase) -> str:
-    """
-    Retrieves connection information for a MongoDB database, formatted for logging.
-
-    :param database: The MongoDB database object from AsyncIOMotorClient
-    :return: A single-line string describing the database connection details
-    """
-    client = database.client
-    db_name = database.name
-    # Get the primary address (host and port)
-    try:
-        # Ensure the client is connected, before trying to get the client.address, otherwise it might be None
-        si = await client.server_info()
-        host, port = client.address
-        primary_info = f"{host}:{port} version:{si.get('version', 'Unknown version')}"
-    except Exception:  # noqa
-        primary_info = "Unknown primary node"
-
-    # Get all connected nodes
-    connected_nodes = client.nodes
-    connected_nodes_info = ", ".join([f"{node[0]}:{node[1]}" for node in connected_nodes]) or "None"  # type: ignore
-
-    # Format the output for logging
-    connection_info = (
-        f"Database: {db_name}, Primary: {primary_info}, Nodes: {connected_nodes_info}"
-    )
-
-    return connection_info
 
 
 def _get_or_create_client(mongodb_uri: str, clients: dict) -> AsyncIOMotorClient:
@@ -46,7 +18,7 @@ def _get_or_create_client(mongodb_uri: str, clients: dict) -> AsyncIOMotorClient
     reducing the total number of connections opened against the MongoDB cluster.
     """
     if mongodb_uri not in clients:
-        clients[mongodb_uri] = AsyncIOMotorClient(
+        clients[mongodb_uri] = open_mongo_client(
             mongodb_uri,
             tlsAllowInvalidCertificates=True
         )
@@ -94,14 +66,6 @@ def _get_jobs_db(mongodb_uri: str, db_name: str, clients: dict) -> AsyncIOMotorD
     Decouples the Zambia jobs database creation from the provider.
     """
     return _get_or_create_client(mongodb_uri, clients).get_database(db_name)
-
-
-async def check_mongo_health(client: AsyncIOMotorClient) -> bool:
-    try:
-        result = await client.admin.command("ping")
-        return result.get("ok") == 1.0
-    except Exception:
-        return False
 
 
 class CompassDBProvider:
@@ -348,15 +312,16 @@ class CompassDBProvider:
             async with cls._lock:  # Ensure that only one coroutine is creating and initializing the database instance
                 if cls._application_mongo_db is None:  # Double-check after acquiring the lock
                     cls._logger.info("Connecting to Application MongoDB")
-                    # Create the database instance
-                    cls._application_mongo_db = _get_application_db(cls._get_settings().application_mongodb_uri,
-                                                                    cls._get_settings().application_database_name,
-                                                                    cls._clients)
+                    settings = cls._get_settings()
+                    database = _get_application_db(settings.application_mongodb_uri,
+                                                   settings.application_database_name,
+                                                   cls._clients)
+                    await require_healthy_database(database, label="Application",
+                                                   mongodb_uri=settings.application_mongodb_uri,
+                                                   logger=cls._logger)
                     cls._logger.info("Connected to Application MongoDB database: %s",
-                                     await _get_database_connection_info(cls._application_mongo_db))
-                    if not await check_mongo_health(cls._application_mongo_db.client):
-                        raise RuntimeError("MongoDB health check failed for Application database")
-                    cls._logger.info("Successfully pinged Application MongoDB")
+                                     await get_database_connection_info(database))
+                    cls._application_mongo_db = database
 
         return cls._application_mongo_db
 
@@ -370,17 +335,18 @@ class CompassDBProvider:
             async with cls._lock:  # Ensure that only one coroutine is creating and initializing the database instance
                 if cls._userdata_mongo_db is None:  # Double-check after acquiring the lock
                     cls._logger.info("Connecting to Userdata MongoDB")
-                    # Create the database instance
-                    cls._userdata_mongo_db = _get_userdata_db(
-                        cls._get_settings().userdata_mongodb_uri,
-                        cls._get_settings().userdata_database_name,
+                    settings = cls._get_settings()
+                    database = _get_userdata_db(
+                        settings.userdata_mongodb_uri,
+                        settings.userdata_database_name,
                         cls._clients
                     )
+                    await require_healthy_database(database, label="Userdata",
+                                                   mongodb_uri=settings.userdata_mongodb_uri,
+                                                   logger=cls._logger)
                     cls._logger.info("Connected to Userdata MongoDB database: %s",
-                                     await _get_database_connection_info(cls._userdata_mongo_db))
-                    if not await check_mongo_health(cls._userdata_mongo_db.client):
-                        raise RuntimeError("MongoDB health check failed for Userdata database")
-                    cls._logger.info("Successfully pinged Userdata MongoDB")
+                                     await get_database_connection_info(database))
+                    cls._userdata_mongo_db = database
         return cls._userdata_mongo_db
 
     @classmethod
@@ -389,15 +355,16 @@ class CompassDBProvider:
             async with cls._lock:  # Ensure that only one coroutine is creating and initializing the database instance
                 if cls._taxonomy_mongo_db is None:  # Double-check after acquiring the lock
                     cls._logger.info("Connecting to Taxonomy MongoDB")
-                    # Create the database instance
-                    cls._taxonomy_mongo_db = _get_taxonomy_db(cls._get_settings().taxonomy_mongodb_uri,
-                                                              cls._get_settings().taxonomy_database_name,
-                                                              cls._clients)
+                    settings = cls._get_settings()
+                    database = _get_taxonomy_db(settings.taxonomy_mongodb_uri,
+                                                settings.taxonomy_database_name,
+                                                cls._clients)
+                    await require_healthy_database(database, label="Taxonomy",
+                                                   mongodb_uri=settings.taxonomy_mongodb_uri,
+                                                   logger=cls._logger)
                     cls._logger.info("Connected to Taxonomy MongoDB database: %s",
-                                     await _get_database_connection_info(cls._taxonomy_mongo_db))
-                    if not await check_mongo_health(cls._taxonomy_mongo_db.client):
-                        raise RuntimeError("MongoDB health check failed for Taxonomy database")
-                    cls._logger.info("Successfully pinged Taxonomy MongoDB")
+                                     await get_database_connection_info(database))
+                    cls._taxonomy_mongo_db = database
         return cls._taxonomy_mongo_db
 
     @classmethod
@@ -406,16 +373,18 @@ class CompassDBProvider:
             async with cls._lock:
                 if cls._career_explorer_mongo_db is None:
                     cls._logger.info("Connecting to Career Explorer MongoDB")
-                    cls._career_explorer_mongo_db = _get_career_explorer_db(
-                        cls._get_settings().career_explorer_mongodb_uri,
-                        cls._get_settings().career_explorer_database_name,
+                    settings = cls._get_settings()
+                    database = _get_career_explorer_db(
+                        settings.career_explorer_mongodb_uri,
+                        settings.career_explorer_database_name,
                         cls._clients,
                     )
+                    await require_healthy_database(database, label="Career Explorer",
+                                                   mongodb_uri=settings.career_explorer_mongodb_uri,
+                                                   logger=cls._logger)
                     cls._logger.info("Connected to Career Explorer MongoDB database: %s",
-                                     await _get_database_connection_info(cls._career_explorer_mongo_db))
-                    if not await check_mongo_health(cls._career_explorer_mongo_db.client):
-                        raise RuntimeError("MongoDB health check failed for Career Explorer database")
-                    cls._logger.info("Successfully pinged Career Explorer MongoDB")
+                                     await get_database_connection_info(database))
+                    cls._career_explorer_mongo_db = database
         return cls._career_explorer_mongo_db
 
     @classmethod
@@ -424,15 +393,16 @@ class CompassDBProvider:
             async with cls._lock:  # Ensure that only one coroutine is creating and initializing the database instance
                 if cls._metrics_mongo_db is None:  # Double-check after acquiring the lock
                     cls._logger.info("Connecting to Metrics MongoDB")
-                    # Create the database instance
-                    cls._metrics_mongo_db = _get_metrics_db(cls._get_settings().metrics_mongodb_uri,
-                                                            cls._get_settings().metrics_database_name,
-                                                            cls._clients)
+                    settings = cls._get_settings()
+                    database = _get_metrics_db(settings.metrics_mongodb_uri,
+                                               settings.metrics_database_name,
+                                               cls._clients)
+                    await require_healthy_database(database, label="Metrics",
+                                                   mongodb_uri=settings.metrics_mongodb_uri,
+                                                   logger=cls._logger)
                     cls._logger.info("Connected to Metrics MongoDB database: %s",
-                                     await _get_database_connection_info(cls._metrics_mongo_db))
-                    if not await check_mongo_health(cls._metrics_mongo_db.client):
-                        raise RuntimeError("MongoDB health check failed for Metrics database")
-                    cls._logger.info("Successfully pinged Metrics MongoDB")
+                                     await get_database_connection_info(database))
+                    cls._metrics_mongo_db = database
         return cls._metrics_mongo_db
 
     @classmethod
@@ -442,16 +412,17 @@ class CompassDBProvider:
                 if cls._jobs_mongo_db is None:
                     cls._logger.info("Connecting to Jobs MongoDB")
                     settings = cls._get_settings()
-                    cls._jobs_mongo_db = _get_jobs_db(
+                    database = _get_jobs_db(
                         settings.jobs_mongodb_uri,
                         settings.jobs_database_name,
                         cls._clients
                     )
+                    await require_healthy_database(database, label="Jobs",
+                                                   mongodb_uri=settings.jobs_mongodb_uri,
+                                                   logger=cls._logger)
                     cls._logger.info("Connected to Jobs MongoDB database: %s",
-                                     await _get_database_connection_info(cls._jobs_mongo_db))
-                    if not await check_mongo_health(cls._jobs_mongo_db.client):
-                        raise RuntimeError("MongoDB health check failed for Zambia Jobs database")
-                    cls._logger.info("Successfully pinged Jobs MongoDB")
+                                     await get_database_connection_info(database))
+                    cls._jobs_mongo_db = database
         return cls._jobs_mongo_db
 
     @staticmethod

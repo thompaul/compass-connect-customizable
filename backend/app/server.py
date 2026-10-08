@@ -307,10 +307,6 @@ logger.info("LLM provider: %s, models: %s", application_config.llm_provider,
 #################
 init_tracing(application_config.tracing_config)
 
-# warning log when registration code bypass is enabled
-if _disable_registration_code:
-    logger.warning("GLOBAL_DISABLE_REGISTRATION_CODE is enabled - registered users can create preferences without invitation codes.")
-
 ##################
 # Set Sentry Context, after setting application config.
 # because: some contexts depend on the application config variables.
@@ -322,6 +318,30 @@ set_sentry_contexts()
 # Initialize Feature Loader
 ############################################
 feature_loader = FeatureLoader(application_config=application_config)
+
+
+def log_security_posture(app_cfg: ApplicationConfig):
+    """
+    Report every setting that relaxes a security control, from the configuration the
+    container actually received, whichever way it is set.
+
+    This was a warning emitted only when the bypass was on, which made silence ambiguous:
+    it meant either that the bypass was off or that the variable never arrived. On a live
+    deployment it meant the second. `GLOBAL_DISABLE_REGISTRATION_CODE=true` was set in
+    the environment's own configuration file and is not among the variables the IaC passes
+    to the Cloud Run container, so the backend went on requiring invitation codes that the
+    operator had deliberately turned off, and nothing anywhere said so. Stating the value
+    either way is what makes a dropped variable visible.
+
+    Called from the startup hook rather than at import so it reports the configuration in
+    force, next to the other startup lines an operator reads when something looks wrong.
+    """
+    if app_cfg.disable_registration_code:
+        logger.warning("GLOBAL_DISABLE_REGISTRATION_CODE is enabled - registered users can "
+                       "create preferences without invitation codes.")
+    else:
+        logger.info("GLOBAL_DISABLE_REGISTRATION_CODE is not enabled - an invitation code is "
+                    "required to create preferences.")
 
 
 ############################################
@@ -343,6 +363,8 @@ async def lifespan(_app: FastAPI):
     jobs_db = await CompassDBProvider.get_jobs_db()
 
     app_cfg = get_application_config()
+    log_security_posture(app_cfg)
+
     # Initialize the MongoDB databases
     # run the initialization in parallel
     await asyncio.gather(
