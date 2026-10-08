@@ -490,6 +490,36 @@ def _verify_domain(credentials: Any, _project_id: str, props: dict[str, Any]):
             _elapsed_time = time.time() - _started_at
 
 
+def _apply_callback_uri(credentials: Any, project_id: str, callback_uri: str,
+                        current_cfg: dict[str, Any]) -> dict[str, Any]:
+    """
+    Point the email action links at the application's own handler, if the API allows it.
+
+    It does not, for any custom domain: Identity Platform answers
+    EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED for anything that is not the project's own
+    firebaseapp.com or web.app address. That is not a reason to fail a deployment, but it
+    is a reason to say plainly what the people using it will see, because password reset
+    and email verification links will carry a Google address rather than this one.
+    """
+    try:
+        return _identity_platform_update_config(
+            credentials, project_id,
+            {"notification": {"sendEmail": {"callbackUri": callback_uri}}},
+            wait_for_client=False)
+    except HttpError as e:
+        if "EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED" not in str(e):
+            raise
+        _in_use = current_cfg.get("notification", {}).get("sendEmail", {}).get("callbackUri")
+        pulumi.warn(
+            f"The email action handler stays at '{_in_use}' - Identity Platform refused "
+            f"'{callback_uri}'. It accepts this only on a domain Firebase Hosting serves for "
+            f"the project itself, and rejects every custom domain. Password reset and email "
+            f"verification links sent to users will therefore point at that address instead "
+            f"of this deployment's own, and the page they land on is Firebase's rather than "
+            f"the application's. Everything else in the email configuration was applied.")
+        return current_cfg
+
+
 def _apply_config(props: dict[str, Any]) -> dict[str, Any]:
     _project_id = props.get("project")
     if _project_id is None:
@@ -531,10 +561,23 @@ def _apply_config(props: dict[str, Any]) -> dict[str, Any]:
     # Phase 2: verify the domain, then apply the email configuration it gates.
     if _notification is not None:
         _verify_domain(_credentials, _project_id, props)
+
+        # The action handler the email links point at is applied on its own. Identity
+        # Platform accepts it only on a domain Firebase Hosting serves - the project's own
+        # <project>.firebaseapp.com or <project>.web.app - and rejects every custom domain
+        # with EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED, including the one Firebase Hosting serves
+        # for this very environment. Sending it with the rest would lose the whole email
+        # configuration over the one field that cannot be set.
+        _callback_uri = _notification.get("sendEmail", {}).pop("callbackUri", None)
+
         pulumi.info(f"Applying the email notification config for project: {_project_id}")
         _current_cfg = _identity_platform_update_config(
             _credentials, _project_id, {"notification": _notification}, wait_for_client=False
         )
+
+        if _callback_uri is not None:
+            _current_cfg = _apply_callback_uri(
+                _credentials, _project_id, _callback_uri, _current_cfg)
 
     # Convert the keys to snake_case to match the input props
     _current_cfg = convert_keys_to_snake_case(_current_cfg)
