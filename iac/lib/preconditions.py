@@ -8,13 +8,10 @@ before anything exists costs seconds and leaves nothing behind.
 The pattern follows ``dns/deploy_dns.py``: check first, raise with what to do about it.
 """
 
-import os
-import sys
 from typing import Any, Callable, List, Optional
 
 __all__ = [
     "MissingPrecondition",
-    "import_real_dnspython",
     "nameservers_for",
     "require_delegated_domain",
     "require_service_account_credentials",
@@ -25,39 +22,6 @@ class MissingPrecondition(Exception):
     """Something the module needs was not in place. Nothing has been created."""
 
 
-def import_real_dnspython() -> Optional[Any]:
-    """
-    Return dnspython's resolver module, not this repository's ``iac/dns`` package.
-
-    ``iac/dns`` is a Pulumi module and the scripts put ``iac`` at the front of the import
-    path, so the name ``dns`` resolves to that directory. Anything wanting real DNS - a
-    ``mongodb+srv://`` connection string, or the delegation check below - gets
-
-        ImportError: cannot import name 'resolver' from 'dns' (iac/dns/__init__.py)
-
-    which names neither the cause nor the fix. Importing with this repository off the path
-    caches the right module, so later imports anywhere in the process find it too.
-
-    The collision is a repository-level problem and wants a rename; this contains it.
-    """
-    shadowed = {name: module for name, module in list(sys.modules.items())
-                if name == "dns" or name.startswith("dns.")}
-    iac_root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-
-    for name in shadowed:
-        del sys.modules[name]
-    saved_path = sys.path[:]
-    sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != iac_root]
-    try:
-        import dns.resolver  # noqa: PLC0415
-        return dns.resolver
-    except ImportError:
-        sys.modules.update(shadowed)
-        return None
-    finally:
-        sys.path[:] = saved_path
-
-
 def nameservers_for(domain: str, *, timeout: float = 10.0) -> List[str]:
     """
     The nameservers public DNS gives for a domain, or an empty list.
@@ -65,11 +29,12 @@ def nameservers_for(domain: str, *, timeout: float = 10.0) -> List[str]:
     An empty list means the domain is not delegated - which is indistinguishable, and
     equivalent, from not being resolvable at all for our purposes.
     """
-    resolver_module = import_real_dnspython()
-    if resolver_module is None:
+    try:
+        import dns.resolver  # noqa: PLC0415 - optional, and only this function needs it
+    except ImportError:
         return []
 
-    resolver = resolver_module.Resolver()
+    resolver = dns.resolver.Resolver()
     resolver.timeout = timeout
     resolver.lifetime = timeout
     try:

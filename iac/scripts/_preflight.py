@@ -58,42 +58,6 @@ def _scrub(message: str, uris: List[str]) -> str:
     return re.sub(r"://([^:/@\s]+):[^@/\s]+@", r"://\1:***@", message)
 
 
-def _import_real_dnspython() -> None:
-    """
-    Make ``import dns.resolver`` reach dnspython rather than this repository.
-
-    ``iac/dns`` is a Pulumi module, and the scripts put ``iac`` at the front of the import
-    path, so the name ``dns`` resolves to that directory. A ``mongodb+srv://`` connection
-    string needs dnspython to look up the SRV record, and the driver reports the collision
-    as:
-
-        ConfigurationError: cannot import name 'resolver' from 'dns' (iac/dns/__init__.py)
-
-    which names neither the real cause nor the fix. Importing dnspython here, with this
-    repository off the path, caches the right module so the driver finds it later. The
-    collision itself is a repository-level problem and wants a rename.
-    """
-    import sys  # noqa: PLC0415
-
-    shadowed = {name: module for name, module in list(sys.modules.items())
-                if name == "dns" or name.startswith("dns.")}
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-
-    for name in shadowed:
-        del sys.modules[name]
-    saved_path = sys.path[:]
-    sys.path[:] = [p for p in sys.path
-                   if os.path.abspath(p or ".") != repo_root]
-    try:
-        import dns.resolver  # noqa: PLC0415,F401 - imported for its side effect on sys.modules
-    except ImportError:
-        # Without dnspython an srv:// connection string cannot be resolved; the driver
-        # will say so itself, and a plain mongodb:// one still works.
-        sys.modules.update(shadowed)
-    finally:
-        sys.path[:] = saved_path
-
-
 def _load_driver():
     """
     Import the MongoDB driver only when a live check actually runs.
@@ -107,7 +71,6 @@ def _load_driver():
         from bson.errors import InvalidId  # noqa: PLC0415
     except ImportError:
         return None
-    _import_real_dnspython()
     return MongoClient, ObjectId, InvalidId
 
 

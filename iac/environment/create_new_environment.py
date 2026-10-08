@@ -8,11 +8,21 @@ import pulumiverse_time as time
 
 from lib.std_pulumi import enable_services, get_resource_name, int_to_base36
 
-from dns import REQUIRED_SERVICES as DNS_SERVICES
 from auth import REQUIRED_SERVICES as AUTH_SERVICES
 from backend import REQUIRED_SERVICES as BACKEND_SERVICES
 from common import REQUIRED_SERVICES as COMMON_SERVICES
 from frontend import REQUIRED_SERVICES as FRONTEND_SERVICES
+
+# The dns module's one service, declared here rather than in an iac/dns/__init__.py.
+# That file made `iac/dns` an importable package named `dns`, and because the scripts put
+# the iac root first on sys.path it shadowed dnspython for the whole process - so a
+# mongodb+srv:// connection string could not resolve its SRV record, reported as
+# "cannot import name 'resolver' from 'dns'". Without the __init__.py the directory is at
+# most a namespace portion, which a real installed package always beats.
+DNS_SERVICES = [
+    # GCP Cloud DNS, for the environment's own zone
+    "dns.googleapis.com",
+]
 
 # The services that are required for the environment
 BASE_SERVICES = [
