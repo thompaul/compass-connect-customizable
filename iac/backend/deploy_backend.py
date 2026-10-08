@@ -9,6 +9,7 @@ from pulumi import Output
 
 from backend._construct_api_gateway_cfg import construct_api_gateway_cfg
 from lib import ProjectBaseConfig, get_resource_name, get_project_base_config, Version
+from lib.preconditions import require_service_account_credentials
 from scripts.formatters import construct_docker_tag
 from backend.cv_bucket import _create_cv_upload_bucket, _grant_cloud_run_sa_access_to_cv_bucket
 
@@ -582,6 +583,12 @@ def deploy_backend(
     """
     Deploy the backend infrastructure
     """
+    # The API gateway configuration below is built by fetching an identity token, which a
+    # user login cannot do. Checked here rather than there, because by the time that call
+    # is reached the Cloud Run service exists and the failure reads as a configuration
+    # fault rather than as the wrong kind of credential.
+    require_service_account_credentials()
+
     basic_config = get_project_base_config(project=project, location=location)
     docker_tag = construct_docker_tag(
         git_branch_name=deployable_version.git_branch_name,

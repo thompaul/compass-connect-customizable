@@ -12,6 +12,7 @@ libs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, libs_dir)
 
 from lib import get_resource_name, ProjectBaseConfig, get_project_base_config
+from lib.preconditions import require_delegated_domain
 from identity_platform import IdentityPlatform, NotificationConfigArgs, SendEmailArgs, DNSInfoArgs, EmailTemplateArgs
 
 
@@ -287,6 +288,11 @@ def deploy_auth(*,
                      on the Google sign-in consent screen.  Reads from the ``auth:app_name``
                      Pulumi config key.
     """
+    # Refuse to start unless the domain is delegated. Everything below depends on Firebase
+    # being able to read this zone over public DNS, and an undelegated zone fails that in a
+    # way that looks like a transient verification fault rather than a missing step.
+    domain_name.apply(require_delegated_domain)
+
     _basic_config = get_project_base_config(
         project=project,
         location=location,
