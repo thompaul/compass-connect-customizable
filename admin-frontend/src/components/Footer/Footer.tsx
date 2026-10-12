@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Container, Divider, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import CustomLink from "src/theme/CustomLink/CustomLink";
-import { getPartnerLogos, getProductName, type PartnerLogo } from "src/envService";
+import { getContactEmail, getFooterAttribution, getPartnerLogos, type PartnerLogo } from "src/envService";
 import { getLegalDocumentAbsoluteUrl, LEGAL_DOCUMENT_ROUTE_PATHS } from "src/legal/legalDocumentUrls";
 import type { Theme } from "@mui/material/styles";
 
@@ -18,20 +18,15 @@ export const DATA_TEST_ID = {
   FOOTER_COLLABORATION: `footer-collaboration-${uniqueId}`,
 };
 
-const FOOTER_CONTACT_MAILTO = "mailto:hi@njila.ai";
-
 const Footer: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"));
   const { t } = useTranslation();
-  const appName = getProductName();
-  const configuredPartnerLogos = getPartnerLogos();
-  const DEFAULT_PARTNER_LOGOS = [
-    { src: `${process.env.PUBLIC_URL}/world-bank-logo.svg`, alt: t("footer.worldBankLogoAlt"), height: 28 },
-    { src: `${process.env.PUBLIC_URL}/ministry-tech.png`, alt: t("footer.ministryTechLogoAlt"), height: 36 },
-    { src: `${process.env.PUBLIC_URL}/tabiya-logo.svg`, alt: t("footer.tabiyaLogoAlt"), height: 46 },
-  ];
-  const footerLogos: PartnerLogo[] = configuredPartnerLogos.length > 0 ? configuredPartnerLogos : DEFAULT_PARTNER_LOGOS;
+  // A deployment shows the funders and partners it declares, and no others. There is no
+  // default set: a partner who has not named their funders must not be shown somebody else's.
+  const footerLogos: PartnerLogo[] = getPartnerLogos();
+  const contactEmail = getContactEmail();
+  const attribution = getFooterAttribution();
 
   const privacyHref = getLegalDocumentAbsoluteUrl(LEGAL_DOCUMENT_ROUTE_PATHS.PRIVACY_POLICY);
   const termsHref = getLegalDocumentAbsoluteUrl(LEGAL_DOCUMENT_ROUTE_PATHS.TERMS_OF_USE);
@@ -129,32 +124,37 @@ const Footer: React.FC = () => {
             >
               {t("footer.termsOfUse")}
             </CustomLink>
-            <CustomLink
-              component="a"
-              href={FOOTER_CONTACT_MAILTO}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={DATA_TEST_ID.FOOTER_CONTACT_LINK}
-              sx={{
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                textDecoration: "none",
-                "&:hover": {
-                  textDecoration: "underline",
-                },
-              }}
-            >
-              {t("footer.contact")}
-            </CustomLink>
+            {contactEmail && (
+              <CustomLink
+                component="a"
+                href={`mailto:${contactEmail}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={DATA_TEST_ID.FOOTER_CONTACT_LINK}
+                sx={{
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  textDecoration: "none",
+                  "&:hover": {
+                    textDecoration: "underline",
+                  },
+                }}
+              >
+                {t("footer.contact")}
+              </CustomLink>
+            )}
           </Box>
 
-          <Typography
-            color="text.secondary"
-            data-testid={DATA_TEST_ID.FOOTER_COLLABORATION}
-            sx={{ textAlign: "center", fontSize: "0.7rem" }}
-          >
-            {t("footer.collaboration", { appName })}
-          </Typography>
+          {/* Who runs and funds this deployment. Unset, the footer claims nobody. */}
+          {attribution && (
+            <Typography
+              color="text.secondary"
+              data-testid={DATA_TEST_ID.FOOTER_COLLABORATION}
+              sx={{ textAlign: "center", fontSize: "0.7rem" }}
+            >
+              {attribution}
+            </Typography>
+          )}
         </Box>
       </Container>
     </Box>

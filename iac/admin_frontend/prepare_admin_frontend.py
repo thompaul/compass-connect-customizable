@@ -128,10 +128,16 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
     frontend_browser_tab_title: Optional[str] = getenv("FRONTEND_BROWSER_TAB_TITLE", False, False)
     frontend_meta_description: Optional[str] = getenv("FRONTEND_META_DESCRIPTION", False, False)
     frontend_logo_url: Optional[str] = getenv("FRONTEND_LOGO_URL", False, False)
+    # The admin panel has read a dark logo at five sites since it was written, but this was
+    # never put in its env.js, so the value could not arrive however it was configured.
+    frontend_dark_logo_url: Optional[str] = getenv("FRONTEND_DARK_LOGO_URL", False, False)
     frontend_partner_logos: Optional[str] = getenv("FRONTEND_PARTNER_LOGOS", False, False)
     frontend_favicon_url: Optional[str] = getenv("FRONTEND_FAVICON_URL", False, False)
     frontend_app_icon_url: Optional[str] = getenv("FRONTEND_APP_ICON_URL", False, False)
     frontend_theme_css_variables: Optional[str] = getenv("FRONTEND_THEME_CSS_VARIABLES", False, False)
+    frontend_seo: Optional[str] = getenv("FRONTEND_SEO", False, False)
+    frontend_contact_email: Optional[str] = getenv("FRONTEND_CONTACT_EMAIL", False, False)
+    frontend_footer_attribution: Optional[str] = getenv("FRONTEND_FOOTER_ATTRIBUTION", False, False)
     legal_site_base_url: Optional[str] = getenv("LEGAL_SITE_BASE_URL", False, False)
 
     print(f"Constructing the env.js file... for the run: {stack_name}")
@@ -161,10 +167,14 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
         "FRONTEND_BROWSER_TAB_TITLE": base64_encode(frontend_browser_tab_title),
         "FRONTEND_META_DESCRIPTION": base64_encode(frontend_meta_description),
         "FRONTEND_LOGO_URL": base64_encode(frontend_logo_url),
+        "FRONTEND_DARK_LOGO_URL": base64_encode(frontend_dark_logo_url),
         "FRONTEND_PARTNER_LOGOS": base64_encode(frontend_partner_logos or ""),
         "FRONTEND_FAVICON_URL": base64_encode(frontend_favicon_url),
         "FRONTEND_APP_ICON_URL": base64_encode(frontend_app_icon_url),
         "FRONTEND_THEME_CSS_VARIABLES": base64_encode(frontend_theme_css_variables),
+        "FRONTEND_SEO": base64_encode(frontend_seo or ""),
+        "FRONTEND_CONTACT_EMAIL": base64_encode(frontend_contact_email or ""),
+        "FRONTEND_FOOTER_ATTRIBUTION": base64_encode(frontend_footer_attribution or ""),
         "LEGAL_SITE_BASE_URL": base64_encode(legal_site_base_url),
     }
 

@@ -132,11 +132,7 @@
     "privacyPolicy": "Política de Privacidade",
     "termsOfUse": "Termos de Utilização",
     "accessibility": "Acessibilidade",
-    "contact": "Contacto",
-    "collaboration": "O {{appName}} é uma ferramenta gratuita de orientação profissional disponibilizada pelo Ministério da Tecnologia e Ciência da Zâmbia, desenvolvida em parceria com o Grupo Banco Mundial e a Tabiya.",
-    "worldBankLogoAlt": "Logótipo do Grupo Banco Mundial",
-    "ministryTechLogoAlt": "Logótipo do Ministério da Tecnologia",
-    "tabiyaLogoAlt": "Logótipo da Tabiya"
+    "contact": "Contacto"
   },
   "dashboard": {
     "sectionTitle": "Painel do Administrador — monitorização e análise interinstitucional",

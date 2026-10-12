@@ -1126,12 +1126,8 @@
       "termsOfUse": "Términos de Uso",
       "accessibility": "Accesibilidad",
       "contact": "Contacto",
-      "collaboration": "{{appName}} es una herramienta gratuita de orientación profesional ofrecida por el Ministerio de Tecnología y Ciencia de {{country}}, desarrollada en colaboración con el Grupo del Banco Mundial y Tabiya.",
-      "compassConnectLine1": "Esta es una implementación de demostración de Compass Connect — una herramienta de orientación profesional personalizable y de código abierto, creada por <tabiyaLink>Tabiya</tabiyaLink>.",
-      "compassConnectLine2": "Construida sobre <compassLink>Compass</compassLink>, la herramienta conversacional de código abierto de Tabiya para personas que buscan empleo.",
-      "worldBankLogoAlt": "Logo del Grupo Banco Mundial",
-      "ministryTechLogoAlt": "Logo del Ministerio de Tecnología",
-      "tabiyaLogoAlt": "Logo de Tabiya"
+      "compassConnectLine1": "Compass Connect es una herramienta de orientación profesional personalizable y de código abierto, creada por <tabiyaLink>Tabiya</tabiyaLink>.",
+      "compassConnectLine2": "Construida sobre <compassLink>Compass</compassLink>, la herramienta conversacional de código abierto de Tabiya para personas que buscan empleo."
     },
     "sidebar": {
       "showLess": "Mostrar Menos",

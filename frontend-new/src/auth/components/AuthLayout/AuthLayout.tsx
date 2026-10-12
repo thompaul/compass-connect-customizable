@@ -5,17 +5,12 @@ import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import AuthPageShell, { layoutContentColumnSx } from "src/auth/components/AuthPageShell/AuthPageShell";
 import Footer from "src/home/components/Footer/Footer";
-import {
-  getDarkLogoUrl,
-  getIllustrationUrls,
-  getLogoUrl,
-  getProductName,
-  getRegistrationDisabled,
-} from "src/envService";
+import { getIllustrationUrls, getProductName, getRegistrationDisabled } from "src/envService";
 import { AuthPageProvider } from "src/auth/components/AuthLayout/AuthPageContext";
 import { Backdrop } from "src/theme/Backdrop/Backdrop";
 import { routerPaths } from "src/app/routerPaths";
 import SecondaryButton from "src/theme/SecondaryButton/SecondaryButton";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const FeatureColumn: React.FC<{
   imageSrc: string;
@@ -105,7 +100,7 @@ const AuthLayout: React.FC = () => {
     []
   );
 
-  const logoSrc = getDarkLogoUrl() || getLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const logoSrc = resolveDarkLogoUrl();
   const appName = getProductName();
   const illustrations = getIllustrationUrls();
 

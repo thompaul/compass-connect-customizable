@@ -100,7 +100,7 @@ window.tabiyaConfig = {
   // ################################################################
   GLOBAL_PRODUCT_NAME: btoa("Compass"),
   // Country name shown in user-facing dashboard copy (optional; defaults to "your country" if unset)
-  GLOBAL_COUNTRY_NAME: btoa("Zambia"),
+  GLOBAL_COUNTRY_NAME: btoa(""),
   FRONTEND_BROWSER_TAB_TITLE: btoa("Compass"),
   FRONTEND_META_DESCRIPTION: btoa(
     "Welcome to Compass! An AI-powered career assistant that helps jobseekers identify and showcase their skills."
@@ -114,18 +114,15 @@ window.tabiyaConfig = {
         "Compass is an AI-powered career assistant that helps jobseekers discover and describe their skills.",
     })
   ),
-  FRONTEND_LOGO_URL: btoa("/logo.svg"),
-  FRONTEND_PARTNER_LOGOS: btoa(
-    JSON.stringify([
-      { src: "/world-bank-logo.svg", alt: "World Bank Group", height: 28 },
-      { src: "/ministry-tech.png", alt: "Ministry of Technology and Science", height: 36 },
-      { src: "/tabiya-logo.svg", alt: "Tabiya", height: 46 },
-    ])
-  ),
-  FRONTEND_DARK_LOGO_URL: btoa("/njila-logo-dark.svg"),
-  FRONTEND_FAVICON_URL: btoa("/favicon.svg"),
-  FRONTEND_APP_ICON_URL: btoa("/compass.svg"),
-  FRONTEND_CHAT_AVATAR_URL: btoa("/njila-logo-dark.svg"),
+  FRONTEND_LOGO_URL: btoa("/compass-connect-logo-light.svg"),
+  // The funders and partners this deployment credits in its footer. Empty credits nobody.
+  FRONTEND_PARTNER_LOGOS: btoa(JSON.stringify([])),
+  FRONTEND_DARK_LOGO_URL: btoa("/compass-connect-logo-dark.svg"),
+  FRONTEND_FAVICON_URL: btoa("/compass-connect-favicon.svg"),
+  FRONTEND_APP_ICON_URL: btoa("/compass-connect-logo-light.svg"),
+  FRONTEND_CHAT_AVATAR_URL: btoa("/compass-connect-chat-avatar.svg"),
+  FRONTEND_CONTACT_EMAIL: btoa(""),
+  FRONTEND_FOOTER_ATTRIBUTION: btoa(""),
   FRONTEND_FAQ_TUTORIAL_VIDEO_URL: btoa("https://player.vimeo.com/video/1193881841?h=8ee6f6190d&title=0&byline=0&portrait=0"),
   FRONTEND_ILLUSTRATIONS: btoa(
     JSON.stringify({

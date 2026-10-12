@@ -169,7 +169,7 @@ describe("FRONTEND_PARTNER_LOGOS Getter (getPartnerLogos) tests", () => {
   test("should return the decoded partner logos when the FRONTEND_PARTNER_LOGOS is set", () => {
     // GIVEN the FRONTEND_PARTNER_LOGOS environment variable is set to a base64 encoded JSON array
     const givenPartnerLogos = [
-      { src: "/world-bank-logo.svg", alt: "World Bank", height: 28 },
+      { src: "/a-funder.svg", alt: "A Funder", height: 28 },
       { src: "https://example.org/ministry.png", alt: "Ministry", height: 36, width: 120 },
     ];
     Object.defineProperty(window, "tabiyaConfig", {

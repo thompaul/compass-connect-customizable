@@ -17,11 +17,11 @@ import {
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { routerPaths } from "src/app/routerPaths";
-import { getDarkLogoUrl } from "src/envService";
 import InstitutionAutocomplete from "src/pages/Users/components/InstitutionAutocomplete";
 import { HttpError } from "src/pages/Users/usersService";
 import { CreateRegistrationRequest, RegistrationRoleRequest, registrationsService } from "./registrationsService";
 import { usePublicInstitutionOptions } from "./usePublicInstitutionOptions";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "register-page-9b3d5f7a-2c4e-4d6f-8a0b-1c3e5d7f9a0c";
 
@@ -50,7 +50,7 @@ const Register: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const preferredSrc = getDarkLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const preferredSrc = resolveDarkLogoUrl();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

@@ -42,6 +42,8 @@ export enum EnvVariables {
   FRONTEND_ILLUSTRATIONS = "FRONTEND_ILLUSTRATIONS",
   FRONTEND_HIDE_PROGRAM_SKILLS = "FRONTEND_HIDE_PROGRAM_SKILLS",
   GLOBAL_COUNTRY_NAME = "GLOBAL_COUNTRY_NAME",
+  FRONTEND_CONTACT_EMAIL = "FRONTEND_CONTACT_EMAIL",
+  FRONTEND_FOOTER_ATTRIBUTION = "FRONTEND_FOOTER_ATTRIBUTION",
 }
 
 export const requiredEnvVariables = [
@@ -216,11 +218,17 @@ export const getDefaultLocale = () => {
   return getEnv(EnvVariables.FRONTEND_DEFAULT_LOCALE);
 };
 
+/**
+ * The name this deployment calls itself.
+ *
+ * The default is the product's own name. It used to be one deployment's name, which meant a
+ * partner who had not set this presented itself to its users as that other organisation.
+ */
 export const getProductName = () => {
   const envAppName = getEnv(EnvVariables.GLOBAL_PRODUCT_NAME);
   if (!envAppName) {
     console.warn("Product name not set, keeping the default");
-    return "Njila";
+    return "Compass Connect";
   }
 
   return envAppName;
@@ -410,6 +418,18 @@ export const getThemeCssVariables = (): ThemeCssVariables => {
     return {};
   }
 };
+
+/**
+ * The address a user writes to about this deployment. There is no default: an unconfigured
+ * deployment hides the contact link rather than pointing users at somebody else's inbox.
+ */
+export const getContactEmail = () => getEnv(EnvVariables.FRONTEND_CONTACT_EMAIL);
+
+/**
+ * The line of credit a deployment shows in its footer, naming whoever runs and funds it.
+ * Unset, the footer credits the product rather than inventing a sponsor.
+ */
+export const getFooterAttribution = () => getEnv(EnvVariables.FRONTEND_FOOTER_ATTRIBUTION);
 
 export const ensureRequiredEnvVars = () => {
   requiredEnvVariables.forEach((key: EnvVariables) => {

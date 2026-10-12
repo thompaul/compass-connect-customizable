@@ -1,9 +1,9 @@
 {
-  "short_name": "Njila Admin",
-  "name": "Njila Admin",
+  "short_name": "Compass Connect Admin",
+  "name": "Compass Connect Admin",
   "icons": [
     {
-      "src": "logo.svg",
+      "src": "compass-connect-favicon.svg",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     }

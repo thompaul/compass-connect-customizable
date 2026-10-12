@@ -8,7 +8,8 @@ import { routerPaths } from "src/app/routerPaths";
 import { useNavigate } from "react-router-dom";
 import MetricsService from "src/metrics/metricsService";
 import { EventType } from "src/metrics/types";
-import { getDarkLogoUrl, getIllustrationUrls, getProductName } from "src/envService";
+import { getIllustrationUrls, getProductName } from "src/envService";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "f1228c6a-e447-4946-b810-0c7ddc8ca833";
 
@@ -27,7 +28,7 @@ const VerifyEmail: React.FC = () => {
   const theme = useTheme();
   const appName = getProductName();
   const navigate = useNavigate();
-  const logoSrc = getDarkLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const logoSrc = resolveDarkLogoUrl();
 
   useEffect(() => {
     MetricsService.getInstance().sendMetricsEvent({

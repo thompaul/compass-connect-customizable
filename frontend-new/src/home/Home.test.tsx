@@ -63,8 +63,10 @@ describe("Home", () => {
       // AND the dashboard/job-ready area is rendered
       expect(screen.getByTestId(DATA_TEST_ID.HOME_DASHBOARD_GRID)).toBeInTheDocument();
       expect(screen.getByTestId(JOB_READY_DATA_TEST_ID.HOME_JOB_READY)).toBeInTheDocument();
-      // AND the footer collaboration section is visible
-      expect(screen.getByTestId(FOOTER_DATA_TEST_ID.FOOTER_COLLABORATION)).toBeInTheDocument();
+      // AND the footer is rendered, crediting the product rather than an unconfigured
+      // deployment's absent sponsor
+      expect(screen.getByTestId(FOOTER_DATA_TEST_ID.FOOTER_CONTAINER)).toBeInTheDocument();
+      expect(screen.queryByTestId(FOOTER_DATA_TEST_ID.FOOTER_COLLABORATION)).not.toBeInTheDocument();
     });
 
     test("should show hero headline and path illustration", () => {

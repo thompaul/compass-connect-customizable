@@ -106,7 +106,7 @@ exports[`Report should render Report correctly 1`] = `
           x="0"
           y="0"
         >
-          This report summarizes the key information gathered during a conversation with Njila on June 01, 2021. Njila is an AI chatbot that assists job-seekers in exploring their skills and experiences. This report presents the candidate’s work experience and the skills identified from each experience. This information can be used to guide job search and highlight their skills when applying for jobs, especially during interviews with potential employers. It can be a good starting point for creating a complete CV.
+          This report summarizes the key information gathered during a conversation with Compass Connect on June 01, 2021. Compass Connect is an AI chatbot that assists job-seekers in exploring their skills and experiences. This report presents the candidate’s work experience and the skills identified from each experience. This information can be used to guide job search and highlight their skills when applying for jobs, especially during interviews with potential employers. It can be a good starting point for creating a complete CV.
         </text>
       </view>
       <view
@@ -356,7 +356,7 @@ exports[`Report should render Report correctly 1`] = `
             x="0"
             y="0"
           >
-            Below, you will find a list of the skills discovered during your conversation with Njila, along with their descriptions.
+            Below, you will find a list of the skills discovered during your conversation with Compass Connect, along with their descriptions.
           </text>
         </view>
         <view
@@ -444,7 +444,7 @@ exports[`Report should render Report correctly 1`] = `
             Listed skills are based on a conversation with the candidate, are not verified or validated by Tabiya, and may be inaccurate. 
              
           </text>
-          Information should be checked before use for job search, job interviews, or for creating a CV. To revise this information, speak with Njila again or create a complete CV based on this report.
+          Information should be checked before use for job search, job interviews, or for creating a CV. To revise this information, speak with Compass Connect again or create a complete CV based on this report.
         </text>
       </view>
       <text

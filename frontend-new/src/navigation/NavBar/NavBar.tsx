@@ -41,6 +41,7 @@ import { LocalesLabels } from "src/i18n/constants";
 import { useExperiencesDrawer } from "src/experiences/ExperiencesDrawerProvider";
 import { useUserProfileContext } from "src/profile/UserProfileContext";
 import { useRebuildProfile } from "src/chat/RebuildProfileContext";
+import { resolveLightLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "c3a8f1d2-7b4e-4c9a-a5d6-8e3f2b1c0d9e";
 
@@ -114,8 +115,9 @@ const NavBar: React.FC<NavBarProps> = ({ headerColor = "primary" }) => {
   const bgColor = paletteColor?.main ?? theme.palette.primary.main;
   const textColor = paletteColor?.contrastText ?? theme.palette.primary.contrastText;
 
-  const logoUrlFromEnv = getAppIconUrl();
-  const logoSrc = logoUrlFromEnv || `${process.env.PUBLIC_URL}/njila_logo.svg`;
+  // The bar is painted in the brand colour, so an unconfigured deployment needs the
+  // light wordmark rather than the dark one the rest of the interface falls back to.
+  const logoSrc = getAppIconUrl() || resolveLightLogoUrl();
 
   const currentLocale = i18n.language?.split("-")[0]?.toUpperCase() || "EN";
 

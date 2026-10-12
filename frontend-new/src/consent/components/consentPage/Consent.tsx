@@ -22,7 +22,7 @@ import { DeviceSpecificationEvent, EventType, UserLocationEvent } from "src/metr
 import { browserName, deviceType, osName, browserVersion } from "react-device-detect";
 import { getCoordinates } from "src/metrics/utils/getUserLocation";
 import MetricsService from "src/metrics/metricsService";
-import { getDarkLogoUrl } from "src/envService";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "1dee3ba4-1853-40c6-aaad-eeeb0e94788d";
 
@@ -53,7 +53,7 @@ export const DATA_TEST_ID = {
 const Consent: React.FC = () => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const logoSrc = getDarkLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const logoSrc = resolveDarkLogoUrl();
   const isSmallMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"));
   const navigate = useNavigate();
   const [isAccepting, setIsAccepting] = useState(false);

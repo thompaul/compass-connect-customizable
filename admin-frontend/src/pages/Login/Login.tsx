@@ -7,9 +7,9 @@ import FirebaseEmailAuthenticationService from "src/auth/services/FirebaseAuthen
 import { FirebaseError } from "src/error/FirebaseError/firebaseError";
 import { FirebaseErrorCodes } from "src/error/FirebaseError/firebaseError.constants";
 import { useSnackbar } from "src/theme/SnackbarProvider/SnackbarProvider";
-import { getDarkLogoUrl } from "src/envService";
 import UserStateService from "src/userState/UserStateService";
 import { registrationsService, RegistrationStatus } from "src/pages/Register/registrationsService";
+import { DEFAULT_BRAND_ASSETS, resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "login-page-5a8f3b2c-1d4e-4f6a-9b8c-7e2d1f0a3b5c";
 
@@ -35,8 +35,7 @@ const Login: React.FC<LoginProps> = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const preferredLocal = `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
-  const preferredSrc = getDarkLogoUrl() || preferredLocal;
+  const preferredSrc = resolveDarkLogoUrl();
   const [logoSrc, setLogoSrc] = useState(preferredSrc);
 
   useEffect(() => {
@@ -160,7 +159,10 @@ const Login: React.FC<LoginProps> = () => {
               alt={t("login.logoAlt")}
               data-testid={DATA_TEST_ID.LOGIN_PAGE_LOGO}
               onError={() => {
-                setLogoSrc((prev) => (prev === preferredLocal ? prev : preferredLocal));
+                // A configured logo that fails to load leaves the page unlabelled, so fall
+                // back to the product's own mark rather than to a broken image.
+                const fallback = `${process.env.PUBLIC_URL}${DEFAULT_BRAND_ASSETS.LOGO_DARK}`;
+                setLogoSrc((prev) => (prev === fallback ? prev : fallback));
               }}
               sx={{
                 height: 64,

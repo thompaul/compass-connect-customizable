@@ -3,7 +3,7 @@ import { Box, Container, Divider, Typography, useMediaQuery, useTheme } from "@m
 import type { SxProps } from "@mui/material";
 import { Trans, useTranslation } from "react-i18next";
 import CustomLink from "src/theme/CustomLink/CustomLink";
-import { getPartnerLogos, getProductName, type PartnerLogo } from "src/envService";
+import { getContactEmail, getFooterAttribution, getPartnerLogos, type PartnerLogo } from "src/envService";
 import { routerPaths } from "src/app/routerPaths";
 import type { Theme } from "@mui/material/styles";
 
@@ -25,9 +25,6 @@ export const COMPASS_CONNECT_URLS = {
   COMPASS: "https://github.com/tabiya-tech/compass",
 };
 
-export const EXTERNAL_URLS = {
-  CONTACT: "mailto:hi@njila.ai",
-};
 
 interface FooterProps {
   sx?: SxProps<Theme>;
@@ -36,15 +33,12 @@ interface FooterProps {
 const Footer: React.FC<FooterProps> = ({ sx }) => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const appName = getProductName();
   const isMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down("md"));
-  const configuredPartnerLogos = getPartnerLogos();
-  const DEFAULT_PARTNER_LOGOS = [
-    { src: `${process.env.PUBLIC_URL}/world-bank-logo.svg`, alt: t("home.footer.worldBankLogoAlt"), height: 28 },
-    { src: `${process.env.PUBLIC_URL}/ministry-tech.png`, alt: t("home.footer.ministryTechLogoAlt"), height: 36 },
-    { src: `${process.env.PUBLIC_URL}/tabiya-logo.svg`, alt: t("home.footer.tabiyaLogoAlt"), height: 46 },
-  ];
-  const footerLogos: PartnerLogo[] = configuredPartnerLogos.length > 0 ? configuredPartnerLogos : DEFAULT_PARTNER_LOGOS;
+  // A deployment shows the funders and partners it declares, and no others. There is no default
+  // set: a partner who has not named their funders must not be shown somebody else's.
+  const footerLogos: PartnerLogo[] = getPartnerLogos();
+  const contactEmail = getContactEmail();
+  const attribution = getFooterAttribution();
 
   const privacyHref = `${globalThis.location.origin}/#${routerPaths.PRIVACY_POLICY}`;
   const termsHref = `${globalThis.location.origin}/#${routerPaths.TERMS_OF_USE}`;
@@ -144,26 +138,36 @@ const Footer: React.FC<FooterProps> = ({ sx }) => {
             >
               {t("home.footer.termsOfUse")}
             </CustomLink>
-            <CustomLink
-              href={EXTERNAL_URLS.CONTACT}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={DATA_TEST_ID.FOOTER_CONTACT_LINK}
-              sx={{
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                textDecoration: "None",
-                "&:hover": {
-                  textDecoration: "underline",
-                },
-              }}
-            >
-              {t("home.footer.contact")}
-            </CustomLink>
+            {contactEmail && (
+              <CustomLink
+                href={`mailto:${contactEmail}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={DATA_TEST_ID.FOOTER_CONTACT_LINK}
+                sx={{
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  textDecoration: "None",
+                  "&:hover": {
+                    textDecoration: "underline",
+                  },
+                }}
+              >
+                {t("home.footer.contact")}
+              </CustomLink>
+            )}
           </Box>
 
-          {/* Collaboration text*/}
-          {appName.toLowerCase() === "compass connect" ? (
+          {/* Who runs and funds this deployment. Unset, the footer credits the product. */}
+          {attribution ? (
+            <Typography
+              color="text.secondary"
+              data-testid={DATA_TEST_ID.FOOTER_COLLABORATION}
+              sx={{ textAlign: "center", fontSize: "0.7rem" }}
+            >
+              {attribution}
+            </Typography>
+          ) : (
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem" }}>
               <Typography color="text.secondary" sx={{ textAlign: "center", fontSize: "0.7rem" }}>
                 <Trans
@@ -186,14 +190,6 @@ const Footer: React.FC<FooterProps> = ({ sx }) => {
                 />
               </Typography>
             </Box>
-          ) : (
-            <Typography
-              color="text.secondary"
-              data-testid={DATA_TEST_ID.FOOTER_COLLABORATION}
-              sx={{ textAlign: "center", fontSize: "0.7rem" }}
-            >
-              {t("home.footer.collaboration", { appName })}
-            </Typography>
           )}
         </Box>
       </Container>

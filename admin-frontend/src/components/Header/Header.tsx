@@ -8,11 +8,11 @@ import ContextMenu from "src/theme/ContextMenu/ContextMenu";
 import { MenuItemConfig } from "src/theme/ContextMenu/menuItemConfig.types";
 import LanguageContextMenu from "src/i18n/languageContextMenu/LanguageContextMenu";
 import { routerPaths } from "src/app/routerPaths";
-import { getDarkLogoUrl } from "src/envService";
 import StdFirebaseAuthenticationService from "src/auth/services/FirebaseAuthenticationService/StdFirebaseAuthenticationService";
 import AuthenticationStateService from "src/auth/services/AuthenticationState.service";
 import UserStateService from "src/userState/UserStateService";
 import { usePendingCount } from "./usePendingCount";
+import { DEFAULT_BRAND_ASSETS, resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "795432d7-a55d-47a2-93cf-85aeb3de2bde";
 
@@ -30,7 +30,7 @@ const Header: React.FC = () => {
   const isMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down("sm"));
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
-  const preferredLogoSrc = getDarkLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const preferredLogoSrc = resolveDarkLogoUrl();
   const [logoSrc, setLogoSrc] = useState(preferredLogoSrc);
   const isAdmin = UserStateService.getInstance().isAdmin();
   const isSuperAdmin = UserStateService.getInstance().isSuperAdmin();
@@ -117,8 +117,10 @@ const Header: React.FC = () => {
               height={12 * theme.tabiyaSpacing.xl}
               data-testid={DATA_TEST_ID.HEADER_LOGO}
               onError={() => {
-                const darkFallback = `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
-                setLogoSrc((prev) => (prev === darkFallback ? prev : darkFallback));
+                // A configured logo that fails to load leaves the panel unlabelled, so fall
+                // back to the product's own mark rather than to a broken image.
+                const fallback = `${process.env.PUBLIC_URL}${DEFAULT_BRAND_ASSETS.LOGO_DARK}`;
+                setLogoSrc((prev) => (prev === fallback ? prev : fallback));
               }}
             />
           </NavLink>

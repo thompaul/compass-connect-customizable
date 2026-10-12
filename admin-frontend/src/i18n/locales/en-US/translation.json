@@ -134,11 +134,7 @@
     "privacyPolicy": "Privacy Policy",
     "termsOfUse": "Terms of Use",
     "accessibility": "Accessibility",
-    "contact": "Contact",
-    "collaboration": "{{appName}} is a free career guidance tool offered by the Zambia Ministry of Technology and Science, built in partnership with the World Bank Group and Tabiya.",
-    "worldBankLogoAlt": "World Bank Group Logo",
-    "ministryTechLogoAlt": "Ministry of Technology Logo",
-    "tabiyaLogoAlt": "Tabiya Logo"
+    "contact": "Contact"
   },
   "dashboard": {
     "sectionTitle": "Administrator dashboard — cross-institutional monitoring and analytics",

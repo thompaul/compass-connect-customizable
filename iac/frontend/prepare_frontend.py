@@ -146,6 +146,7 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
     enable_sentry: str = getenv("FRONTEND_ENABLE_SENTRY", False, False)
     sentry_config: str = getenv("FRONTEND_SENTRY_CONFIG", False, False)
     enable_metrics: str = getenv("FRONTEND_ENABLE_METRICS", False, False)
+    metrics_config: Optional[str] = getenv("FRONTEND_METRICS_CONFIG", False, False)
     login_code: Optional[str] = getenv("FRONTEND_LOGIN_CODE", False, False)
     registration_code: Optional[str] = getenv("FRONTEND_REGISTRATION_CODE", False, False)
     disable_login_code: Optional[str] = getenv("GLOBAL_DISABLE_LOGIN_CODE", False, False)
@@ -177,6 +178,8 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
     frontend_favicon_url: Optional[str] = getenv("FRONTEND_FAVICON_URL", False, False)
     frontend_app_icon_url: Optional[str] = getenv("FRONTEND_APP_ICON_URL", False, False)
     frontend_chat_avatar_url: Optional[str] = getenv("FRONTEND_CHAT_AVATAR_URL", False, False)
+    frontend_contact_email: Optional[str] = getenv("FRONTEND_CONTACT_EMAIL", False, False)
+    frontend_footer_attribution: Optional[str] = getenv("FRONTEND_FOOTER_ATTRIBUTION", False, False)
     frontend_theme_css_variables: Optional[str] = getenv("FRONTEND_THEME_CSS_VARIABLES", False, False)
     frontend_seo: Optional[str] = getenv("FRONTEND_SEO", False, False)
     frontend_illustrations: Optional[str] = getenv("FRONTEND_ILLUSTRATIONS", False, False)
@@ -215,6 +218,7 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
         "FRONTEND_SENTRY_DSN": base64_encode(sentry_dsn),
         "FRONTEND_SENTRY_CONFIG": base64_encode(sentry_config),
         "FRONTEND_ENABLE_METRICS": base64_encode(enable_metrics),
+        "FRONTEND_METRICS_CONFIG": base64_encode(metrics_config or ""),
         "SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY": base64_encode(sensitive_personal_data_rsa_encryption_key),
         "SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY_ID": base64_encode(sensitive_personal_data_rsa_encryption_key_id),
         "FRONTEND_LOGIN_CODE": base64_encode(login_code),
@@ -239,6 +243,8 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
         "FRONTEND_FAVICON_URL": base64_encode(frontend_favicon_url),
         "FRONTEND_APP_ICON_URL": base64_encode(frontend_app_icon_url),
         "FRONTEND_CHAT_AVATAR_URL": base64_encode(frontend_chat_avatar_url),
+        "FRONTEND_CONTACT_EMAIL": base64_encode(frontend_contact_email or ""),
+        "FRONTEND_FOOTER_ATTRIBUTION": base64_encode(frontend_footer_attribution or ""),
         "FRONTEND_THEME_CSS_VARIABLES": base64_encode(frontend_theme_css_variables),
         "FRONTEND_SEO": base64_encode(frontend_seo),
         "FRONTEND_SKILLS_REPORT_OUTPUT_CONFIG": base64_encode(skills_report_config),

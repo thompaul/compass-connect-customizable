@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { firebaseAuth } from "src/auth/firebaseConfig";
 import { routerPaths } from "src/app/routerPaths";
-import { getDarkLogoUrl } from "src/envService";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "auth-handler-page-4a2b8c1d-3e5f-6a7b-8c9d-0e1f2a3b4c5d";
 
@@ -54,7 +54,7 @@ const AuthHandler: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const logoSrc = getDarkLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const logoSrc = resolveDarkLogoUrl();
 
   const goToLogin = useCallback(() => {
     navigate(routerPaths.LOGIN, { replace: true });

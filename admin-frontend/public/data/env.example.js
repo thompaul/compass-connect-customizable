@@ -33,19 +33,17 @@ window.tabiyaConfig = {
   // #       Branding Settings
   // ################################################################
   LEGAL_SITE_BASE_URL: btoa("https://foo.bar"),
-  GLOBAL_PRODUCT_NAME: btoa("Compass Admin"),
-  FRONTEND_BROWSER_TAB_TITLE: btoa("Compass Admin"),
-  FRONTEND_META_DESCRIPTION: btoa("Compass Admin Portal - Manage and configure Compass platform settings."),
-  FRONTEND_LOGO_URL: btoa("/logo.svg"),
-  FRONTEND_PARTNER_LOGOS: btoa(
-    JSON.stringify([
-      { src: "/world-bank-logo.svg", alt: "World Bank Group", height: 28 },
-      { src: "/ministry-tech.png", alt: "Ministry of Technology and Science", height: 36 },
-      { src: "/tabiya-logo.svg", alt: "Tabiya", height: 46 },
-    ])
-  ),
-  FRONTEND_FAVICON_URL: btoa("/logo.svg"),
-  FRONTEND_APP_ICON_URL: btoa("/logo.svg"),
+  GLOBAL_PRODUCT_NAME: btoa("Compass Connect Admin"),
+  FRONTEND_BROWSER_TAB_TITLE: btoa("Compass Connect Admin"),
+  FRONTEND_META_DESCRIPTION: btoa("Compass Connect Admin - Manage and configure this deployment."),
+  FRONTEND_LOGO_URL: btoa("/compass-connect-logo-light.svg"),
+  FRONTEND_DARK_LOGO_URL: btoa("/compass-connect-logo-dark.svg"),
+  // The funders and partners this deployment credits in its footer. Empty credits nobody.
+  FRONTEND_PARTNER_LOGOS: btoa(JSON.stringify([])),
+  FRONTEND_CONTACT_EMAIL: btoa(""),
+  FRONTEND_FOOTER_ATTRIBUTION: btoa(""),
+  FRONTEND_FAVICON_URL: btoa("/compass-connect-favicon.svg"),
+  FRONTEND_APP_ICON_URL: btoa("/compass-connect-favicon.svg"),
   // Override platform colours — see src/styles/variables.css for all available keys. Values are RGB triplets, e.g. "239 123 0".
   FRONTEND_THEME_CSS_VARIABLES: btoa(
     JSON.stringify({

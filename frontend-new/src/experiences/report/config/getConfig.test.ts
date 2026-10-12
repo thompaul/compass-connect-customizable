@@ -7,6 +7,10 @@ import { getSkillsReportOutputConfig } from "./getConfig";
 
 jest.mock("src/envService", () => ({
   getSkillsReportOutputConfigEnvVar: jest.fn(),
+  // The default report config carries the deployment's own logo, which is resolved from
+  // these two; unmocked, importing the default would throw before any test ran.
+  getDarkLogoUrl: jest.fn(() => ""),
+  getLogoUrl: jest.fn(() => ""),
 }));
 
 const defaultValue = defaultSkillsReportOutputConfig;

@@ -3,8 +3,8 @@ import { Alert, Box, Button, CircularProgress, Container, Link, TextField, Typog
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { routerPaths } from "src/app/routerPaths";
-import { getDarkLogoUrl } from "src/envService";
 import FirebaseEmailAuthenticationService from "src/auth/services/FirebaseAuthenticationService/FirebaseEmailAuthenticationService";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "forgot-password-page-2e4f6a8b-0c1d-4e3f-5a6b-7c8d9e0f1a2b";
 
@@ -25,7 +25,7 @@ const ForgotPassword: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const preferredSrc = getDarkLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const preferredSrc = resolveDarkLogoUrl();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

@@ -1120,12 +1120,8 @@
       "termsOfUse": "Terms of Use",
       "accessibility": "Accessibility",
       "contact": "Contact",
-      "collaboration": "{{appName}} is a free career guidance tool offered by the {{country}} Ministry of Technology and Science, built in partnership with the World Bank Group and Tabiya.",
-      "compassConnectLine1": "This is a demo deployment of Compass Connect — a customizable, open-source career guidance tool built by <tabiyaLink>Tabiya</tabiyaLink>.",
-      "compassConnectLine2": "Built on <compassLink>Compass</compassLink>, Tabiya's open-source conversational tool for jobseekers.",
-      "worldBankLogoAlt": "World Bank Group Logo",
-      "ministryTechLogoAlt": "Ministry of Technology Logo",
-      "tabiyaLogoAlt": "Tabiya Logo"
+      "compassConnectLine1": "Compass Connect is a customizable, open-source career guidance tool built by <tabiyaLink>Tabiya</tabiyaLink>.",
+      "compassConnectLine2": "Built on <compassLink>Compass</compassLink>, Tabiya's open-source conversational tool for jobseekers."
     },
     "sidebar": {
       "showLess": "Show Less",

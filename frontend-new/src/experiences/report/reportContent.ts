@@ -1,5 +1,6 @@
 import i18n from "src/i18n/i18n";
 import { getProductName } from "src/envService";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 export const ReportContent = {
   // Use i18n keys and resolve at call/render time
@@ -45,8 +46,11 @@ export const ReportContent = {
   REPORT_BODY_TEXT: (currentDate: string) =>
     i18n.t("experiences.report.bodyText", { date: currentDate, appName: getProductName() }),
   IMAGE_URLS: {
-    NJILA_LOGO: `${process.env.PUBLIC_URL}/njila-logo-dark.svg`,
-    OXFORD_LOGO: `${process.env.PUBLIC_URL}/oxford-logo.png`,
+    // Resolved on read, not on import: the module is pulled in by configuration defaults
+    // that load before the runtime environment is available to be read.
+    get BRAND_LOGO() {
+      return resolveDarkLogoUrl();
+    },
     LOCATION_ICON: `${process.env.PUBLIC_URL}/location.png`,
     PHONE_ICON: `${process.env.PUBLIC_URL}/phone.png`,
     EMAIL_ICON: `${process.env.PUBLIC_URL}/email.png`,

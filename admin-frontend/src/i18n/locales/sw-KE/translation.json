@@ -141,11 +141,7 @@
     "privacyPolicy": "Sera ya Faragha",
     "termsOfUse": "Masharti ya Matumizi",
     "accessibility": "Ufikivu",
-    "contact": "Wasiliana",
-    "collaboration": "{{appName}} ni zana ya bure ya mwongozo wa kazi inayotolewa na Wizara ya Teknolojia na Sayansi ya Zambia, iliyojengwa kwa ushirikiano na Kundi la Benki ya Dunia na Tabiya.",
-    "worldBankLogoAlt": "Nembo ya Kundi la Benki ya Dunia",
-    "ministryTechLogoAlt": "Nembo ya Wizara ya Teknolojia",
-    "tabiyaLogoAlt": "Nembo ya Tabiya"
+    "contact": "Wasiliana"
   },
   "dashboard": {
     "sectionTitle": "Dashibodi ya msimamizi - ufuatiliaji na uchanganuzi wa taasisi mbalimbali",

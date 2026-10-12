@@ -4,7 +4,7 @@ import { ReportContent } from "src/experiences/report/reportContent";
 export const defaultSkillsReportOutputConfig: SkillsReportOutputConfig = {
   logos: [
     {
-      url: ReportContent.IMAGE_URLS.NJILA_LOGO,
+      url: ReportContent.IMAGE_URLS.BRAND_LOGO,
       docxStyles: {
         width: 120,
         height: 62,

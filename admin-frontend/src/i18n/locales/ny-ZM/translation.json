@@ -141,11 +141,7 @@
     "privacyPolicy": "mfundo zazinsinsi",
     "termsOfUse": "Mgwirizano pazakagwiritsidwe",
     "accessibility": "Kufikika",
-    "contact": "Kontaktani",
-    "collaboration": "{{appName}} ndi chida chaulere cha malangizo a ntchito choperekedwa ndi Unduna wa Ukadaulo ndi Sayansi ku Zambia, chomangidwa mogwirizana ndi World Bank Group ndi Tabiya.",
-    "worldBankLogoAlt": "Chizindikiro cha Gulu la World Bank",
-    "ministryTechLogoAlt": "Chizindikiro cha Unduna wa Teknoloji",
-    "tabiyaLogoAlt": "Chizindikiro cha Tabiya"
+    "contact": "Kontaktani"
   },
   "dashboard": {
     "sectionTitle": "Dashboard yoyang'anira - kuyang'anira ndi kusanthula kwamagulu osiyanasiyana",

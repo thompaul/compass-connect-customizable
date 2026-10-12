@@ -2,10 +2,11 @@ import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Box, Container, Typography, useTheme } from "@mui/material";
 import MarkdownReader from "src/knowledgeHub/components/MarkdownReader/MarkdownReader";
-import { getDarkLogoUrl, getLogoUrl, getProductName } from "src/envService";
+import { getProductName } from "src/envService";
 import { getLegalDocument } from "src/legal/legalDocumentLoader";
 import type { LegalDocumentVariant } from "src/legal/legalDocumentLoader";
 import { routerPaths } from "src/app/routerPaths";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "b2c9e1a4-6f3d-4b8e-9c2a-1d5e7f0a4b6c";
 
@@ -29,8 +30,7 @@ const LegalDocumentPage: React.FC<LegalDocumentPageProps> = ({ variant }) => {
   const { title, markdown } = useMemo(() => getLegalDocument(variant), [variant]);
   const markdownWithAppName = useMemo(() => applyAppNamePlaceholders(markdown, appName), [markdown, appName]);
 
-  const logoUrlFromEnv = getDarkLogoUrl() || getLogoUrl();
-  const logoSrc = logoUrlFromEnv || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const logoSrc = resolveDarkLogoUrl();
 
   return (
     <Box

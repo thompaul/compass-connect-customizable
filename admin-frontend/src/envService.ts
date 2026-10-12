@@ -10,11 +10,11 @@ export enum EnvVariables {
   FRONTEND_ENABLE_SENTRY = "FRONTEND_ENABLE_SENTRY",
   FRONTEND_SENTRY_CONFIG = "FRONTEND_SENTRY_CONFIG",
   TARGET_ENVIRONMENT_NAME = "TARGET_ENVIRONMENT_NAME",
-  SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY = "SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY",
-  SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY_ID = "SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY_ID",
   FRONTEND_SUPPORTED_LOCALES = "FRONTEND_SUPPORTED_LOCALES",
   FRONTEND_DEFAULT_LOCALE = "FRONTEND_DEFAULT_LOCALE",
   GLOBAL_PRODUCT_NAME = "GLOBAL_PRODUCT_NAME",
+  FRONTEND_CONTACT_EMAIL = "FRONTEND_CONTACT_EMAIL",
+  FRONTEND_FOOTER_ATTRIBUTION = "FRONTEND_FOOTER_ATTRIBUTION",
   FRONTEND_BROWSER_TAB_TITLE = "FRONTEND_BROWSER_TAB_TITLE",
   FRONTEND_META_DESCRIPTION = "FRONTEND_META_DESCRIPTION",
   FRONTEND_SEO = "FRONTEND_SEO",
@@ -118,11 +118,23 @@ export const getProductName = () => {
   const envAppName = getEnv(EnvVariables.GLOBAL_PRODUCT_NAME);
   if (!envAppName) {
     console.warn("Product name not set, keeping the default");
-    return "Admin";
+    return "Compass Connect";
   }
 
   return envAppName;
 };
+
+/**
+ * The address an admin writes to about this deployment. There is no default: an unconfigured
+ * deployment hides the contact link rather than pointing people at somebody else's inbox.
+ */
+export const getContactEmail = () => getEnv(EnvVariables.FRONTEND_CONTACT_EMAIL);
+
+/**
+ * The line of credit the footer shows, naming whoever runs and funds this deployment.
+ * Unset, the footer credits nobody rather than inventing a sponsor.
+ */
+export const getFooterAttribution = () => getEnv(EnvVariables.FRONTEND_FOOTER_ATTRIBUTION);
 
 export const getBrowserTabTitle = () => getEnv(EnvVariables.FRONTEND_BROWSER_TAB_TITLE);
 

@@ -45,7 +45,8 @@ import { PersistentStorageService } from "src/app/PersistentStorageService/Persi
 import { extractPersonalInfo } from "./config/utils";
 import SensitiveDataFormSkeleton from "src/sensitiveData/components/sensitiveDataForm/SensitiveDataFormSkeleton";
 import InstitutionService, { InstitutionSummary, Programme } from "src/institutions/services/InstitutionService";
-import { getDarkLogoUrl, getProductName } from "src/envService";
+import { getProductName } from "src/envService";
+import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
 const uniqueId = "ab02918f-d559-47ba-9662-ea6b3a3606d1";
 
@@ -181,7 +182,7 @@ const SensitiveDataForm: React.FC = () => {
   const { t } = useTranslation();
   const appName = getProductName();
   const navigate = useNavigate();
-  const logoSrc = getDarkLogoUrl() || `${process.env.PUBLIC_URL}/njila-logo-dark.svg`;
+  const logoSrc = resolveDarkLogoUrl();
   const { enqueueSnackbar } = useSnackbar();
 
   const [isSavingSensitiveData, setIsSavingSensitiveData] = useState(false);
