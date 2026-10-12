@@ -43,8 +43,34 @@ are yours to write.** Until you supply them, both pages tell your users so.
 
 ## Logos & Icons
 
-Place assets in `frontend-new/public/` and reference them as `/filename.ext`,
-or use a full URL to an externally hosted asset.
+Put your files in an `assets/` directory beside your `.env` and stack config, and reference
+them by the path they have inside it:
+
+```
+config-dir/
+  .env.<realm>.<env>
+  stack_config.<realm>.<env>.yaml
+  horizonte.json
+  assets/
+    horizonte-logo.svg
+    icons/favicon.svg
+```
+
+```json
+"assets": { "logo": "/horizonte-logo.svg", "favicon": "/icons/favicon.svg" }
+```
+
+`setup_env.py` uploads that directory to your realm's artifact repository, and the deployment
+unpacks it over the frontend bundle before uploading to your bucket. A file of yours replaces
+one that shipped under the same name, so you can override an illustration as well as add one.
+Nothing is committed to Tabiya's repository, and changing an asset costs a redeploy rather
+than a rebuild.
+
+A full `https://` URL to an asset you host yourself also works, anywhere a path does.
+
+Images, fonts, icons and text are accepted, up to 25 MB for the directory as a whole — these
+files are served to every visitor on every page load. Anything else is refused by name when
+you run `setup_env.py`, rather than quietly becoming public static content.
 
 - `branding.assets.logo` — main logo
 - `branding.assets.darkLogo` — logo variant used on light backgrounds

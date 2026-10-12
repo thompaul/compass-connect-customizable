@@ -16,8 +16,11 @@ libs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, libs_dir)
 
 from _types import IaCModules
-from scripts.formatters import construct_secret_id
+from scripts.formatters import construct_artifacts_version, construct_secret_id
 from lib import get_stack_name_from, MAIN_SECRET_VERSION, ENV_VARS_SECRET_PREFIX, STACK_CONFIG_SECRET_PREFIX, Version
+from lib.branding_assets import ASSETS_DIRECTORY_NAME, branding_archive_name, pack_assets, \
+    upload_generic_artifacts_file
+from lib import get_pulumi_stack_outputs
 from _common import add_select_environment_arguments, \
     write_config_to_pulumi_yaml_file, run_pulumi_up, get_realm_environment
 
@@ -80,6 +83,48 @@ def _upload_file_to_secret_manager(
         parent=full_qualified_secret_name,  # type: ignore
         payload={"data": env_file_content.encode("utf-8")}
     ))
+
+
+def _upload_branding_assets(*, realm_name: str, stack_name: str, config_files_dir: str,
+                            version: Version) -> None:
+    """
+    Carry the operator's own asset files to where the deployment can reach them.
+
+    They go to the realm's generic repository, beside the frontend bundle and the templates
+    that `prepare.py` already downloads from it, and at the same version as the environment
+    file in Secret Manager - so a deployment pinned to a version gets the branding uploaded
+    for that version.
+
+    Supplying none is ordinary: the deployment then shows the product's own marks, which is
+    what an unbranded Compass Connect is meant to look like.
+    """
+    assets_dir = os.path.join(config_files_dir, ASSETS_DIRECTORY_NAME)
+    if not os.path.isdir(assets_dir):
+        print(f"info: no {ASSETS_DIRECTORY_NAME}/ directory in {config_files_dir}; this "
+              f"deployment will show Compass Connect's own marks wherever it has not given "
+              f"a full URL of its own.")
+        return
+
+    formatted_version = construct_artifacts_version(
+        git_branch_name=version.git_branch_name,
+        git_sha=version.git_sha,
+    )
+    realm_outputs = get_pulumi_stack_outputs(stack_name=realm_name, module="realm")
+    generic_repository = realm_outputs["generic_repository"].value
+
+    archive_path = os.path.join(config_files_dir, branding_archive_name(stack_name))
+    try:
+        size = pack_assets(assets_dir, archive_path)
+        print(f"info: uploading {os.path.basename(archive_path)} ({size / 1024:.0f} KB) "
+              f"at {formatted_version}")
+        upload_generic_artifacts_file(
+            repository=generic_repository,
+            file_path=archive_path,
+            version=formatted_version,
+        )
+    finally:
+        if os.path.exists(archive_path):
+            os.remove(archive_path)
 
 
 def _main(*, realm_name: str, env_name: str, target_git_branch: str, target_git_sha: str, config_files_dir: str,
@@ -147,6 +192,14 @@ def _main(*, realm_name: str, env_name: str, target_git_branch: str, target_git_
         expire_time=secrets_expire_time
     )
 
+    # 6. Upload this deployment's own asset files, if it has supplied any.
+    _upload_branding_assets(
+        realm_name=realm_name,
+        stack_name=stack_name,
+        config_files_dir=config_files_dir,
+        version=target_version,
+    )
+
     print(f"Environment setup completed. {stack_name} is ready to use.")
 
 
@@ -170,6 +223,8 @@ if __name__ == "__main__":
              " - The directory should contain: \n"
              "      1) .env.<REALM_NAME>.<ENV_NAME> file containing the environment variables and values.\n"
              "      2) stack_config.<REALM_NAME>.<ENV_NAME>.yaml Containing the stack config for the pulumi modules.\n"
+             "      3) optionally, an assets/ directory of your own logos, icons and\n"
+             "         illustrations, which are served from your deployment's own bucket.\n"
              " - It should be an absolute path or the path from the place where you are running script from."
     )
 

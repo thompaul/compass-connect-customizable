@@ -11,6 +11,7 @@ iac_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # so that we can import the iac/lib module when we run pulumi from within the iac/admin-frontend directory.
 sys.path.insert(0, iac_folder)
 
+from lib.branding_assets import apply_assets
 from lib import getenv, get_realm_and_env_name_from_stack, \
     get_pulumi_stack_outputs, construct_artifacts_dir, save_content_in_file, \
     download_generic_artifacts_file, Version, base64_encode
@@ -241,6 +242,15 @@ def prepare_admin_frontend(
     # copy the artifacts to the stack artifacts dir.
     stack_artifacts_dir = os.path.join(deployments_dir, stack_artifacts_dir)
     shutil.copytree(artifacts_dir, stack_artifacts_dir, dirs_exist_ok=True)
+
+    # Lay this deployment's own files over the bundle, before the env.js and index.html
+    # patching below and before the bucket upload that follows. Last writer wins, so an
+    # operator's logo.svg replaces the one that shipped rather than sitting beside it.
+    apply_assets(
+        iac_folder=iac_folder,
+        stack_name=stack_name,
+        artifacts_dir=stack_artifacts_dir,
+    )
 
     # construct the env.js content for this deployment and stack.
     _construct_env_js_content(
