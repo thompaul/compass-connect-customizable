@@ -199,8 +199,10 @@ if not os.getenv('CAREER_EXPLORER_MONGODB_URI'):
     raise ValueError("Mandatory CAREER_EXPLORER_MONGODB_URI env variable is not set!")
 if not os.getenv("CAREER_EXPLORER_DATABASE_NAME"):
     raise ValueError("Mandatory CAREER_EXPLORER_DATABASE_NAME environment variable is not set")
-if not os.getenv('JOBS_MONGODB_URI'):
-    raise ValueError("Mandatory JOBS_MONGODB_URI env variable is not set!")
+# JOBS_MONGODB_URI is deliberately not required. Compass stopped owning a jobs collection -
+# `app/jobs/routes.py` says so in as many words, "it no longer owns one" - and the matching
+# service is the source now. The requirement outlived the thing it was for, so every partner
+# provisioned a database that nothing read, and the runbook told them to.
 if not os.getenv('TAXONOMY_MODEL_ID'):
     raise ValueError("Mandatory TAXONOMY_MODEL_ID env variable is not set!")
 if not os.getenv("EMBEDDINGS_SERVICE_NAME"):
@@ -370,7 +372,6 @@ async def lifespan(_app: FastAPI):
     userdata_db = await CompassDBProvider.get_userdata_db()
     metrics_db = await CompassDBProvider.get_metrics_db()
     career_explorer_db = await CompassDBProvider.get_career_explorer_db()
-    jobs_db = await CompassDBProvider.get_jobs_db()
 
     app_cfg = get_application_config()
     log_security_posture(app_cfg)
@@ -413,7 +414,6 @@ async def lifespan(_app: FastAPI):
     taxonomy_db.client.close()
     metrics_db.client.close()
     career_explorer_db.client.close()
-    jobs_db.client.close()
 
     # Flush any buffered LLM traces. Cloud Run tears containers down aggressively and without this
     # the last conversation's spans are simply lost.
