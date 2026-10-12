@@ -1,3 +1,5 @@
+import { getKnowledgeHubSectors } from "src/envService";
+
 export interface EmployerGroup {
   province: string;
   employers: string[];
@@ -28,29 +30,32 @@ export interface SectorStaticData {
   sources: string;
 }
 
-/**
- * Which pathway pages to show per app name (value of GLOBAL_PRODUCT_NAME).
- * Unknown app names fall back to showing all sectors.
- */
-export const PATHWAY_PAGES_BY_APP: Record<string, string[]> = {
-  Njila: [
-    "agriculture-pathway",
-    "mining-pathway",
-    "energy-pathway",
-    "hospitality-pathway",
-    "health-pathway",
-    "water-pathway",
-  ],
-  Njira: ["energy-pathway"],
-};
+/** Every sector page that exists, for a deployment to choose from. */
+export const availableSectorIds = (): string[] => Object.keys(SECTOR_DATA);
 
 /**
- * Returns the ordered list of sector IDs to display for the given app name.
- * Falls back to all sectors if the app name is not in PATHWAY_PAGES_BY_APP.
+ * The sector pages this deployment has asked for, in the order it asked for them.
+ *
+ * Which sectors appear used to be a lookup on the product name against a record holding two
+ * named deployments, documented as falling back to *all* sectors for anything else. So a
+ * third deployment did not get an empty hub or an error - it got another country's entire
+ * catalogue, silently, and nothing in the interface distinguished that from a choice.
+ *
+ * An id the deployment names and this bundle does not have is reported rather than skipped:
+ * a sector quietly missing from a list looks exactly like a sector nobody asked for.
  */
-export const getSectorsForApp = (appName: string): SectorStaticData[] => {
-  const ids = PATHWAY_PAGES_BY_APP[appName] ?? Object.keys(SECTOR_DATA);
-  return ids.flatMap((id) => (SECTOR_DATA[id] ? [SECTOR_DATA[id]] : []));
+export const getConfiguredSectors = (): SectorStaticData[] => {
+  const configured = getKnowledgeHubSectors();
+  const unknown = configured.filter((id) => !SECTOR_DATA[id]);
+  if (unknown.length > 0) {
+    console.error(
+      new Error(
+        `FRONTEND_KNOWLEDGE_HUB_SECTORS names sectors this deployment does not have: ` +
+          `${unknown.join(", ")}. Available: ${availableSectorIds().join(", ")}`
+      )
+    );
+  }
+  return configured.flatMap((id) => (SECTOR_DATA[id] ? [SECTOR_DATA[id]] : []));
 };
 
 const SECTOR_DATA: Record<string, SectorStaticData> = {

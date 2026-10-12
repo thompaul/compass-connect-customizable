@@ -17,6 +17,7 @@ into the source.
 
 Runnable directly: `python3 test_no_partner_defaults.py` from the iac directory.
 """
+import ast
 import json
 import os
 import re
@@ -47,8 +48,12 @@ SOURCE_EXEMPTIONS = {
         "a compatibility shim keyed by product name, so the two deployments that predate "
         "configurable legal content keep theirs; the default resolves to a placeholder",
     "frontend-new/src/knowledgeHub/components/SectorProfile/sectorStaticData.ts":
-        "the country-specific sector catalogue, which becomes optional and configured "
-        "rather than looked up by product name in its own stage",
+        "one country's sector catalogue. Which of its pages appear is now configuration, and "
+        "the whole feature is off unless asked for, but the prose itself is still that "
+        "country's and is still in the bundle - that is the next phase's content work",
+    "frontend-new/src/faq/faqDocumentLoader.ts":
+        "a compatibility shim keyed by product name, so the deployment that wrote these FAQ "
+        "documents keeps them; a deployment not named here has no FAQ and no route to one",
 }
 
 #: Directories of partner-authored prose. Making these supplied per deployment rather than
@@ -202,6 +207,69 @@ def test_an_unconfigured_deployment_shows_no_partner_legal_documents():
     assert fallback.group(1) == "NOT_CONFIGURED", (
         f"the legal documents fall back to {fallback.group(1)}; an unconfigured deployment "
         "must be told it has published none, not handed another organisation's.")
+
+
+def test_the_faq_is_not_served_to_every_deployment():
+    """
+    The largest instance of the whole problem, and the only one that was not a fallback.
+
+    Seven FAQ documents were keyed by locale alone - no product, no configuration, nothing
+    to override - so every deployment served forty-odd paragraphs opening "Njila is a free
+    AI career guidance platform built for the Zambian youth, supported by ... the Ministry
+    of Technical and Vocational Skills Development (MoTS) of Zambia and the World Bank
+    Group", in whichever of seven languages the reader had chosen.
+    """
+    loader = os.path.join(_REPO, "frontend-new/src/faq/faqDocumentLoader.ts")
+    source = open(loader, encoding="utf-8").read()
+    assert "FAQ_BY_LOCALE" not in source, (
+        "the FAQ is keyed by locale alone again, which means every deployment serves "
+        "whatever these documents happen to say")
+    assert "hasFaqDocument" in source, (
+        "nothing can ask whether this deployment has a FAQ, so something will link to one "
+        "that does not exist")
+
+
+def test_the_sector_catalogue_is_not_selected_by_product_name():
+    """
+    `PATHWAY_PAGES_BY_APP` held two named deployments and fell back to *all* sectors.
+
+    So a third deployment turning the hub on did not get an empty list or an error - it got
+    another country's entire catalogue, and nothing distinguished that from a choice.
+    """
+    data = os.path.join(_REPO,
+                        "frontend-new/src/knowledgeHub/components/SectorProfile/sectorStaticData.ts")
+    source = open(data, encoding="utf-8").read()
+    assert "PATHWAY_PAGES_BY_APP" not in source, "sectors are keyed by product name again"
+    assert "getKnowledgeHubSectors" in source, "sectors are no longer read from configuration"
+
+
+def test_a_deployment_serves_the_sector_hub_only_if_it_asked_for_it():
+    """
+    `add_teveta_routes(app)` was called unconditionally, mounting one country's TVET
+    register - 1.9 MB of institutions, programmes and curriculum - in every deployment.
+    """
+    server = os.path.join(_REPO, "backend/app/server.py")
+    tree = ast.parse(open(server, encoding="utf-8").read())
+
+    guarded = False
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        for called in ast.walk(node):
+            if (isinstance(called, ast.Call) and isinstance(called.func, ast.Name)
+                    and called.func.id == "add_teveta_routes"):
+                guarded = True
+    assert guarded, (
+        "add_teveta_routes is registered unconditionally; a deployment that never asked for "
+        "another country's sector catalogue serves it anyway.")
+
+
+def test_the_shipped_defaults_do_not_turn_the_sector_hub_on():
+    """A default that mounts one country's catalogue is the thing this stage removes."""
+    config = json.loads(open(SHIPPED_CONFIG, encoding="utf-8").read())
+    hub = config.get("knowledgeHub", {})
+    assert hub.get("enabled") is False, "the shipped defaults enable the sector knowledge hub"
+    assert hub.get("sectors") == [], "the shipped defaults name somebody's sectors"
 
 
 if __name__ == "__main__":

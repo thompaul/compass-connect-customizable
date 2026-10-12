@@ -3,7 +3,7 @@ import { Box, Stack, Typography, useTheme } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { IsOnlineContext } from "src/app/isOnlineProvider/IsOnlineProvider";
-import { getSectorsForApp } from "src/knowledgeHub/components/SectorProfile/sectorStaticData";
+import { getConfiguredSectors } from "src/knowledgeHub/components/SectorProfile/sectorStaticData";
 import { getIllustrationUrls, getProductName } from "src/envService";
 import { routerPaths } from "src/app/routerPaths";
 import Footer from "src/home/components/Footer/Footer";
@@ -28,7 +28,7 @@ const KnowledgeHubList: React.FC = () => {
   const { t } = useTranslation();
   const isOnline = useContext(IsOnlineContext);
 
-  const sectors = useMemo(() => getSectorsForApp(getProductName()), []);
+  const sectors = useMemo(() => getConfiguredSectors(), []);
 
   const handleDocumentClick = (id: string) => {
     if (!isOnline) return;

@@ -78,6 +78,7 @@ class BackendServiceConfig:
     cv_max_uploads_per_user: Optional[str]
     cv_rate_limit_per_minute: Optional[str]
     enable_cv_upload: Optional[str]
+    enable_knowledge_hub: Optional[str]
     language_config: str
     admin_tenant_id: Optional[str]
     global_product_name: Optional[str]
@@ -530,6 +531,9 @@ def _deploy_cloud_run_service(
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="GLOBAL_ENABLE_CV_UPLOAD",
                             value=backend_service_cfg.enable_cv_upload or "false"),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="GLOBAL_ENABLE_KNOWLEDGE_HUB",
+                            value=backend_service_cfg.enable_knowledge_hub or "false"),
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="GLOBAL_DISABLE_REGISTRATION_CODE",
                             value=backend_service_cfg.disable_registration_code or "false"),

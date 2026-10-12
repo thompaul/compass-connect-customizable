@@ -8,6 +8,7 @@ import LanguageContextMenu from "src/i18n/languageContextMenu/LanguageContextMen
 import SecondaryButton from "src/theme/SecondaryButton/SecondaryButton";
 import { routerPaths } from "src/app/routerPaths";
 import { getIllustrationUrls } from "src/envService";
+import { hasFaqDocument } from "src/faq/faqDocumentLoader";
 
 const uniqueId = "9ad2f1c6-3e08-4b49-9f7d-4c8a1e3d5b27";
 
@@ -54,7 +55,10 @@ const AuthPageShell: React.FC<AuthPageShellProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  // Hidden where this deployment has no FAQ: the route is not registered, so the link
+  // would be a 404 that looks like a broken sign-in page.
   const isOnFaqPage = location.pathname === routerPaths.FAQ;
+  const hasFaq = hasFaqDocument();
   const hasBodyContent = React.Children.toArray(children).some((child) => {
     if (child == null) return false;
     if (React.isValidElement(child) && child.type === React.Fragment) {
@@ -135,7 +139,7 @@ const AuthPageShell: React.FC<AuthPageShellProps> = ({
                 sx={{ maxHeight: { xs: 36, md: 44 }, width: "auto", maxWidth: "min(200px, 45vw)" }}
               />
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                {!isOnFaqPage && (
+                {hasFaq && !isOnFaqPage && (
                   <SecondaryButton
                     color="primary"
                     onClick={handleFaqClick}

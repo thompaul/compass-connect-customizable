@@ -19,6 +19,15 @@ import AuthenticationStateService from "src/auth/services/AuthenticationState.se
 import { routerPaths } from "src/app/routerPaths";
 import { AuthBroadcastChannel, AuthChannelMessage } from "src/auth/services/authBroadcastChannel/authBroadcastChannel";
 
+// The router now asks which optional features this deployment offers before building its
+// route table - whether it has a FAQ, whether the sector hub is on - and the first of those
+// reads the product name. Give it one, so the warning an unnamed deployment correctly emits
+// does not read as noise from the app itself.
+jest.mock("src/envService", () => ({
+  ...jest.requireActual("src/envService"),
+  getProductName: () => "Test Product",
+}));
+
 // Mock UserProfileContext so route content renders without API calls
 jest.mock("src/profile/UserProfileContext", () => ({
   useUserProfileContext: () => ({

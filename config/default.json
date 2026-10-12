@@ -82,6 +82,10 @@
   "cv": {
     "enabled": true
   },
+  "knowledgeHub": {
+    "enabled": false,
+    "sectors": []
+  },
   "skillsReport": {
     "logos": [],
     "downloadFormats": [

@@ -1,4 +1,5 @@
 import { routerPaths } from "src/app/routerPaths";
+import { getKnowledgeHubEnabled } from "src/envService";
 
 export interface Module {
   id: string;
@@ -52,9 +53,24 @@ const DEFAULT_MODULES: Module[] = [
 ];
 
 /**
- * Gets the list of enabled modules.
- * Returns the hardcoded default set of 5 modules.
+ * The modules this deployment offers on its home page.
+ *
+ * The knowledge hub leaves the list when it is off, so a deployment that does not serve the
+ * route does not advertise it either. A card leading to a page that is not registered is a
+ * 404 the visitor reads as a broken product rather than as a module nobody turned on.
+ *
+ * `nextModuleId` is repaired in the same pass: career readiness hands off to the knowledge
+ * hub, and a handoff to a module that is not there would strand whoever completed it.
  */
 export const getEnabledModules = (): Module[] => {
-  return DEFAULT_MODULES;
+  const enabled = getKnowledgeHubEnabled()
+    ? DEFAULT_MODULES
+    : DEFAULT_MODULES.filter((module) => module.id !== "knowledge_hub");
+
+  const present = new Set(enabled.map((module) => module.id));
+  return enabled.map((module) =>
+    module.nextModuleId && !present.has(module.nextModuleId)
+      ? { ...module, nextModuleId: undefined }
+      : module
+  );
 };

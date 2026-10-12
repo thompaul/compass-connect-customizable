@@ -25,7 +25,8 @@ import { StatusCodes } from "http-status-codes";
 import { lazyWithPreload } from "src/utils/preloadableComponent/PreloadableComponent";
 import { TokenValidationFailureCause } from "src/auth/services/Authentication.service";
 import { AuthBroadcastChannel, AuthChannelMessage } from "src/auth/services/authBroadcastChannel/authBroadcastChannel";
-import { getRegistrationDisabled } from "src/envService";
+import { getKnowledgeHubEnabled, getRegistrationDisabled } from "src/envService";
+import { hasFaqDocument } from "src/faq/faqDocumentLoader";
 import { useTranslation } from "react-i18next";
 import Home from "src/home/Home";
 import { AppErrorFallback } from "src/error/errorPage/AppErrorFallback";
@@ -282,6 +283,9 @@ const App = () => {
   // Check if registration is disabled
   const isRegistrationDisabled = getRegistrationDisabled().toLowerCase() === "true";
 
+  const isKnowledgeHubEnabled = getKnowledgeHubEnabled();
+  const hasFaq = hasFaqDocument();
+
   const router = useMemo(
     () =>
       sentryCreateBrowserRouter([
@@ -318,24 +322,31 @@ const App = () => {
                     </ProtectedRoute>
                   ),
                 },
-                {
-                  path: routerPaths.KNOWLEDGE_HUB,
-                  handle: {},
-                  element: (
-                    <ProtectedRoute key={ProtectedRouteKeys.KNOWLEDGE_HUB}>
-                      <LazyLoadedKnowledgeHubList />
-                    </ProtectedRoute>
-                  ),
-                },
-                {
-                  path: routerPaths.KNOWLEDGE_HUB_DOCUMENT,
-                  handle: {},
-                  element: (
-                    <ProtectedRoute key={ProtectedRouteKeys.KNOWLEDGE_HUB_DOCUMENT}>
-                      <LazyLoadedKnowledgeHubDocument />
-                    </ProtectedRoute>
-                  ),
-                },
+                // The sector knowledge hub is one country's catalogue of accredited
+                // institutions, programmes and critical skills. A deployment that has not
+                // asked for it does not serve it, rather than serving somebody else's.
+                ...(isKnowledgeHubEnabled
+                  ? [
+                      {
+                        path: routerPaths.KNOWLEDGE_HUB,
+                        handle: {},
+                        element: (
+                          <ProtectedRoute key={ProtectedRouteKeys.KNOWLEDGE_HUB}>
+                            <LazyLoadedKnowledgeHubList />
+                          </ProtectedRoute>
+                        ),
+                      },
+                      {
+                        path: routerPaths.KNOWLEDGE_HUB_DOCUMENT,
+                        handle: {},
+                        element: (
+                          <ProtectedRoute key={ProtectedRouteKeys.KNOWLEDGE_HUB_DOCUMENT}>
+                            <LazyLoadedKnowledgeHubDocument />
+                          </ProtectedRoute>
+                        ),
+                      },
+                    ]
+                  : []),
                 {
                   path: routerPaths.CAREER_EXPLORER,
                   handle: {
@@ -460,10 +471,9 @@ const App = () => {
               path: routerPaths.TERMS_OF_USE,
               element: <LegalDocumentPage variant="terms" />,
             },
-            {
-              path: routerPaths.FAQ,
-              element: <LazyLoadedFAQPage />,
-            },
+            // Only where this deployment has a FAQ of its own. Without this the page served
+            // another programme's, in whichever of seven languages the reader had chosen.
+            ...(hasFaq ? [{ path: routerPaths.FAQ, element: <LazyLoadedFAQPage /> }] : []),
             {
               path: "*",
               element: <NotFound />,
@@ -471,7 +481,7 @@ const App = () => {
           ],
         },
       ]),
-    [isRegistrationDisabled]
+    [isRegistrationDisabled, isKnowledgeHubEnabled, hasFaq]
   );
 
   if (loading) return <Backdrop isShown={loading} transparent={true} />;

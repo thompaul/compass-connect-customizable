@@ -165,6 +165,8 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
     # features
     features = getenv("FRONTEND_FEATURES", False, False)
     enable_cv_upload: Optional[str] = getenv("GLOBAL_ENABLE_CV_UPLOAD", False, False)
+    enable_knowledge_hub: Optional[str] = getenv("GLOBAL_ENABLE_KNOWLEDGE_HUB", False, False)
+    knowledge_hub_sectors: Optional[str] = getenv("FRONTEND_KNOWLEDGE_HUB_SECTORS", False, False)
     enable_new_session: Optional[str] = getenv("FRONTEND_ENABLE_NEW_SESSION", False, False)
     hide_program_skills: Optional[str] = getenv("FRONTEND_HIDE_PROGRAM_SKILLS", False, False)
 
@@ -227,6 +229,8 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
         "GLOBAL_DISABLE_REGISTRATION_CODE": base64_encode(disable_registration_code),
         "FRONTEND_REGISTRATION_CODE": base64_encode(registration_code),
         "GLOBAL_ENABLE_CV_UPLOAD": base64_encode(enable_cv_upload or ""),
+        "GLOBAL_ENABLE_KNOWLEDGE_HUB": base64_encode(enable_knowledge_hub or ""),
+        "FRONTEND_KNOWLEDGE_HUB_SECTORS": base64_encode(knowledge_hub_sectors or ""),
         "FRONTEND_ENABLE_NEW_SESSION": base64_encode(enable_new_session or ""),
         "FRONTEND_HIDE_PROGRAM_SKILLS": base64_encode(hide_program_skills or ""),
         "FRONTEND_DISABLE_REGISTRATION": base64_encode(disable_registration),

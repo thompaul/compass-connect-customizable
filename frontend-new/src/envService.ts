@@ -44,6 +44,8 @@ export enum EnvVariables {
   GLOBAL_COUNTRY_NAME = "GLOBAL_COUNTRY_NAME",
   FRONTEND_CONTACT_EMAIL = "FRONTEND_CONTACT_EMAIL",
   FRONTEND_FOOTER_ATTRIBUTION = "FRONTEND_FOOTER_ATTRIBUTION",
+  GLOBAL_ENABLE_KNOWLEDGE_HUB = "GLOBAL_ENABLE_KNOWLEDGE_HUB",
+  FRONTEND_KNOWLEDGE_HUB_SECTORS = "FRONTEND_KNOWLEDGE_HUB_SECTORS",
 }
 
 export const requiredEnvVariables = [
@@ -430,6 +432,40 @@ export const getContactEmail = () => getEnv(EnvVariables.FRONTEND_CONTACT_EMAIL)
  * Unset, the footer credits the product rather than inventing a sponsor.
  */
 export const getFooterAttribution = () => getEnv(EnvVariables.FRONTEND_FOOTER_ATTRIBUTION);
+
+/**
+ * Whether this deployment offers the sector knowledge hub.
+ *
+ * Off unless asked for. The hub is a catalogue of one country's accredited institutions,
+ * programmes and critical skills, with that country's maps and editorial - useful where it
+ * applies and meaningless everywhere else, so it is not something a deployment should find
+ * itself serving because nobody turned it off.
+ */
+export const getKnowledgeHubEnabled = (): boolean =>
+  getEnv(EnvVariables.GLOBAL_ENABLE_KNOWLEDGE_HUB).toLowerCase() === "true";
+
+/**
+ * Which sector pages the hub lists, in order, by id.
+ *
+ * This used to be a lookup on the product name against a record of two named deployments,
+ * whose documented fallback was to show *all* sectors - so a third deployment turning the
+ * hub on inherited another country's entire catalogue without choosing any of it.
+ */
+export const getKnowledgeHubSectors = (): string[] => {
+  const raw = getEnv(EnvVariables.FRONTEND_KNOWLEDGE_HUB_SECTORS);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      console.error(new EnvError("FRONTEND_KNOWLEDGE_HUB_SECTORS must be a JSON array"));
+      return [];
+    }
+    return parsed.filter((entry): entry is string => typeof entry === "string");
+  } catch (e) {
+    console.error(new EnvError("Error parsing FRONTEND_KNOWLEDGE_HUB_SECTORS JSON", e));
+    return [];
+  }
+};
 
 export const ensureRequiredEnvVars = () => {
   requiredEnvVariables.forEach((key: EnvVariables) => {

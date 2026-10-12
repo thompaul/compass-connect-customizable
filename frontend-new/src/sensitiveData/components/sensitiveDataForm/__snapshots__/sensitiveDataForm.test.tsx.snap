@@ -38,8 +38,8 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
             <label
               class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined css-qxupq8-MuiFormLabel-root-MuiInputLabel-root"
               data-shrink="false"
-              for=":r2:"
-              id=":r2:-label"
+              for=":r1:"
+              id=":r1:-label"
             >
               First Name
               <span
@@ -57,7 +57,7 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
                 aria-invalid="false"
                 autocomplete="given-name"
                 class="MuiInputBase-input MuiOutlinedInput-input css-p1mqw2-MuiInputBase-input-MuiOutlinedInput-input"
-                id=":r2:"
+                id=":r1:"
                 required=""
                 type="text"
                 value=""
@@ -84,8 +84,8 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
             <label
               class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined css-qxupq8-MuiFormLabel-root-MuiInputLabel-root"
               data-shrink="false"
-              for=":r3:"
-              id=":r3:-label"
+              for=":r2:"
+              id=":r2:-label"
             >
               Last Name
               <span
@@ -103,7 +103,7 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
                 aria-invalid="false"
                 autocomplete="family-name"
                 class="MuiInputBase-input MuiOutlinedInput-input css-p1mqw2-MuiInputBase-input-MuiOutlinedInput-input"
-                id=":r3:"
+                id=":r2:"
                 required=""
                 type="text"
                 value=""
@@ -133,8 +133,8 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
               <label
                 class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-disabled Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined css-qxupq8-MuiFormLabel-root-MuiInputLabel-root"
                 data-shrink="false"
-                for=":r4:"
-                id=":r4:-label"
+                for=":r3:"
+                id=":r3:-label"
               >
                 Institution
                 <span
@@ -156,7 +156,7 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
                   autocomplete="off"
                   class="MuiInputBase-input MuiOutlinedInput-input Mui-disabled MuiInputBase-inputAdornedEnd MuiAutocomplete-input MuiAutocomplete-inputFocused css-8x9d5a-MuiInputBase-input-MuiOutlinedInput-input"
                   disabled=""
-                  id=":r4:"
+                  id=":r3:"
                   placeholder="Start typing to search..."
                   required=""
                   role="combobox"
@@ -214,8 +214,8 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
               <label
                 class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-disabled Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-outlined css-qxupq8-MuiFormLabel-root-MuiInputLabel-root"
                 data-shrink="false"
-                for=":r7:"
-                id=":r7:-label"
+                for=":r6:"
+                id=":r6:-label"
               >
                 Programme
                 <span
@@ -237,7 +237,7 @@ exports[`Sensitive Data Form Rendering static fields should render First Name, L
                   autocomplete="off"
                   class="MuiInputBase-input MuiOutlinedInput-input Mui-disabled MuiInputBase-inputAdornedEnd MuiAutocomplete-input MuiAutocomplete-inputFocused css-8x9d5a-MuiInputBase-input-MuiOutlinedInput-input"
                   disabled=""
-                  id=":r7:"
+                  id=":r6:"
                   placeholder="Select an institution first"
                   required=""
                   role="combobox"

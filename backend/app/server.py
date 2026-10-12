@@ -261,6 +261,16 @@ _enable_cv_upload_str = os.getenv("GLOBAL_ENABLE_CV_UPLOAD", "false")
 _enable_cv_upload = _enable_cv_upload_str.lower() == "true"
 logger.info(f"GLOBAL_ENABLE_CV_UPLOAD: {_enable_cv_upload}")
 
+# Sector knowledge hub feature flag - defaults to False if not set.
+#
+# Off by default on purpose. The data behind these routes is one country's catalogue of
+# accredited institutions, programmes and critical skills - 1.9 MB of it - and it used to be
+# mounted in every deployment unconditionally. A deployment that has not asked for another
+# country's TVET register should not be serving it.
+_enable_knowledge_hub_str = os.getenv("GLOBAL_ENABLE_KNOWLEDGE_HUB", "false")
+_enable_knowledge_hub = _enable_knowledge_hub_str.lower() == "true"
+logger.info(f"GLOBAL_ENABLE_KNOWLEDGE_HUB: {_enable_knowledge_hub}")
+
 _version_info = load_version_info()
 
 application_config = ApplicationConfig(
@@ -556,7 +566,12 @@ add_analytics_routes(app, auth)
 ############################################
 # Add TEVETA knowledge hub routes
 ############################################
-add_teveta_routes(app)
+# Registered only where the deployment asked for them. The loader reads its 1.9 MB data file
+# on the first request rather than at import, so an unregistered route never reads it at all.
+if _enable_knowledge_hub:
+    add_teveta_routes(app)
+else:
+    logger.info("Sector knowledge hub routes not registered (GLOBAL_ENABLE_KNOWLEDGE_HUB is not true)")
 
 ############################################
 # Add POC chat routes

@@ -24,8 +24,12 @@ marks, credits no funders, offers no contact address, reports to no analytics pr
 says plainly on its legal pages that it has not published any. That is deliberate: the
 alternative is a deployment that looks finished while presenting itself as somebody else.
 
-The one consequence worth knowing before you deploy: **your privacy policy and terms of use
-are yours to write.** Until you supply them, both pages tell your users so.
+Two consequences worth knowing before you deploy:
+
+- **Your privacy policy and terms of use are yours to write.** Until you supply them, both
+  pages tell your users so.
+- **The sector knowledge hub and the FAQ are off** until you ask for them. Both carried one
+  country's content to every deployment, so neither is something you get by not deciding.
 
 ## App Name & Tab Title
 
@@ -293,9 +297,43 @@ Each field supports visibility, required/optional, type (free text or choices), 
 For the full schema and examples, see the
 [Sensitive Data Fields Configuration Guide](../frontend-new/sensitive-data-fields-config.md).
 
-## FAQ Video
+## Sector Knowledge Hub
 
-`faq.tutorialVideoUrl` — URL of the tutorial video embedded in the FAQ page.
+`knowledgeHub.enabled` — off unless you ask for it, in both tiers. The hub is a catalogue of
+one country's accredited institutions, programmes and critical skills, with that country's
+maps and editorial. A deployment that leaves it off serves no sector route, shows no
+navigation entry and offers no module card for it.
+
+`knowledgeHub.sectors` — which sector pages appear, in the order you list them. Which sectors
+a deployment showed used to be a lookup on its product name, whose documented fallback was to
+show *all* of them — so a new deployment turning the hub on inherited another country's entire
+catalogue without choosing any of it.
+
+```json
+"knowledgeHub": { "enabled": true, "sectors": ["agriculture-pathway", "mining-pathway"] }
+```
+
+The pages themselves are still that country's content — the prose, the employer lists, the
+maps. Making them something you can author is the next phase's work; for now the choice is
+whether to show them.
+
+## FAQ
+
+**The FAQ appears only where the deployment has one.** Its documents are matched to the
+deployment by `branding.appName`, the same way legal documents are. With no match there is no
+FAQ page, no navigation entry and no link to one from the sign-in pages.
+
+This used to be keyed by *locale alone* — no product, no configuration, nothing to override —
+so every deployment served the same forty-odd paragraphs describing one programme, its
+country, its ministry and its funder, in whichever of seven languages the reader had chosen.
+
+Supplying your own currently requires a frontend build, as legal documents do: add
+`frontend-new/src/faq/documents/faq.<locale>.md` and register them in
+`frontend-new/src/faq/faqDocumentLoader.ts` under `FAQ_BY_PRODUCT`, keyed by your
+`branding.appName` in lower case. Loading these from your own assets at runtime is the change
+that retires the registry.
+
+`faq.tutorialVideoUrl` — URL of a tutorial video embedded in the FAQ page, if you have one.
 
 ## Writing your own configuration file
 

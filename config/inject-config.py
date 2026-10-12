@@ -28,6 +28,9 @@ BACKEND_ENV_MAP: Dict[str, str] = {
     # CV Upload
     "GLOBAL_ENABLE_CV_UPLOAD": "cv.enabled",
 
+    # Sector knowledge hub
+    "GLOBAL_ENABLE_KNOWLEDGE_HUB": "knowledgeHub.enabled",
+
     # Add more backend env vars here
 }
 
@@ -63,6 +66,10 @@ FRONTEND_ENV_MAP: Dict[str, str] = {
     # CV Upload
     "GLOBAL_ENABLE_CV_UPLOAD": "cv.enabled",
 
+    # Sector knowledge hub
+    "GLOBAL_ENABLE_KNOWLEDGE_HUB": "knowledgeHub.enabled",
+    "FRONTEND_KNOWLEDGE_HUB_SECTORS": "knowledgeHub.sectors",
+
     # i18n
     "FRONTEND_DEFAULT_LOCALE": "i18n.ui.defaultLocale",
     "FRONTEND_SUPPORTED_LOCALES": "i18n.ui.supportedLocales",
@@ -83,6 +90,7 @@ FRONTEND_JSON_FIELDS = {
     'FRONTEND_SENSITIVE_DATA_FIELDS',
     'FRONTEND_ILLUSTRATIONS',
     'FRONTEND_PARTNER_LOGOS',
+    'FRONTEND_KNOWLEDGE_HUB_SECTORS',
     # Add more JSON.stringify fields here
 }
 
