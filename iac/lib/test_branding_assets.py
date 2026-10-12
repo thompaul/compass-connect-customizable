@@ -43,6 +43,30 @@ collect_assets = _module.collect_assets
 pack_assets = _module.pack_assets
 unpack_assets = _module.unpack_assets
 unpacked_assets_dir = _module.unpacked_assets_dir
+CONTENT_DIRECTORY_NAME = _module.CONTENT_DIRECTORY_NAME
+content_documents = _module.content_documents
+
+
+def _is_no_cache():
+    """
+    The cache rule out of `bucket_content.py`, compiled on its own.
+
+    The module it lives in imports pulumi, which these tests deliberately do not need, and the
+    rule is three lines of string matching. So the function is lifted out of the source and
+    compiled by itself - which also means this test fails if the function is renamed or moved,
+    rather than passing against a copy that is no longer the one running.
+    """
+    import ast
+    source = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "frontend", "bucket_content.py"), encoding="utf-8").read()
+    tree = ast.parse(source)
+    definition = next((node for node in tree.body
+                       if isinstance(node, ast.FunctionDef) and node.name == "_is_no_cache"), None)
+    assert definition is not None, "bucket_content.py no longer decides caching in _is_no_cache"
+    namespace = {"os": os}
+    exec(compile(ast.Module(body=[definition], type_ignores=[]), "<bucket_content>", "exec"),  # nosec B102
+         namespace)
+    return namespace["_is_no_cache"]
 
 
 def _write(path: str, content: bytes = b"<svg/>") -> str:
@@ -64,6 +88,7 @@ def test_an_operators_files_reach_the_bundle():
         assets = os.path.join(root, ASSETS_DIRECTORY_NAME)
         _write(os.path.join(assets, "logo.svg"), b"<svg>mine</svg>")
         _write(os.path.join(assets, "icons", "favicon.svg"), b"<svg>favicon</svg>")
+        _write(os.path.join(assets, CONTENT_DIRECTORY_NAME, "privacy-policy.md"), b"# mine")
 
         archive = os.path.join(root, branding_archive_name("myrealm.prod"))
         pack_assets(assets, archive)
@@ -77,13 +102,18 @@ def test_an_operators_files_reach_the_bundle():
 
         applied = apply_assets(iac_folder=root, stack_name="myrealm.prod", artifacts_dir=bundle)
 
-        assert applied == 2, f"expected two files applied, got {applied}"
+        assert applied == 3, f"expected three files applied, got {applied}"
         assert open(os.path.join(bundle, "logo.svg"), "rb").read() == b"<svg>mine</svg>", (
             "the operator's logo did not replace the one that shipped")
         assert os.path.exists(os.path.join(bundle, "icons", "favicon.svg")), (
             "a nested asset did not survive the round trip")
         assert os.path.exists(os.path.join(bundle, "index.html")), (
             "applying assets removed part of the bundle")
+        # And the reader at the far end of that road finds what the writer sent: this is the
+        # list that goes into env.js, worked out from the bundle that is about to be uploaded.
+        assert content_documents(bundle_dir=bundle) == ["privacy-policy.md"], (
+            "an operator's document survived the round trip without being reported, so the "
+            "browser would never ask for it")
 
 
 def test_a_deployment_that_supplied_nothing_is_not_an_error():
@@ -211,6 +241,106 @@ def test_each_environment_gets_its_own_archive():
     """Staging carrying production's branding is the obvious way to find this out late."""
     assert branding_archive_name("realm.prod") != branding_archive_name("realm.dev")
     assert branding_archive_name("realm.prod").endswith(".tar.gz")
+
+
+def test_a_deployment_reports_the_documents_it_is_about_to_serve():
+    """
+    The browser cannot list a bucket, so the deployment has to tell it what is in one.
+
+    Read from the prepared bundle rather than from the operator's directory, because by then
+    an operator's file and a shipped file are the same kind of thing - which is correct, since
+    they are the same kind of thing to the browser too.
+    """
+    with tempfile.TemporaryDirectory() as workspace:
+        bundle = os.path.join(workspace, "bundle")
+        _write(os.path.join(bundle, "index.html"), b"<html/>")
+        _write(os.path.join(bundle, CONTENT_DIRECTORY_NAME, "privacy-policy.md"), b"# p")
+        _write(os.path.join(bundle, CONTENT_DIRECTORY_NAME, "faq.en-GB.md"), b"# f")
+
+        assert content_documents(bundle_dir=bundle) == ["faq.en-GB.md", "privacy-policy.md"]
+
+
+def test_a_deployment_with_no_documents_reports_none():
+    """Supplying none is an ordinary thing to do; it is what the placeholder pages are for."""
+    with tempfile.TemporaryDirectory() as workspace:
+        bundle = os.path.join(workspace, "bundle")
+        _write(os.path.join(bundle, "index.html"), b"<html/>")
+        assert content_documents(bundle_dir=bundle) == []
+
+
+def test_a_misnamed_document_stops_the_deployment_rather_than_being_ignored():
+    """
+    The quietest failure in this path, which is why it is the one worth refusing over.
+
+    `privacy_policy.md` with an underscore packs, uploads, and is served. Nothing ever asks
+    for it, so the operator sees the "not configured" page with their own document sitting in
+    the bucket one URL away, and no log line anywhere connects the two.
+    """
+    with tempfile.TemporaryDirectory() as workspace:
+        bundle = os.path.join(workspace, "bundle")
+        _write(os.path.join(bundle, CONTENT_DIRECTORY_NAME, "privacy_policy.md"), b"# p")
+        try:
+            content_documents(bundle_dir=bundle)
+        except ValueError as refusal:
+            assert "privacy_policy.md" in str(refusal)
+        else:
+            assert False, "a document nothing will ever ask for was accepted"
+
+
+def test_a_document_in_a_language_the_deployment_does_not_offer_is_refused():
+    """
+    The same comparison language itself now gets: two declarations that have to agree.
+
+    A FAQ written for a locale that is not in the menu cannot be reached by anybody. It is
+    always a mistake, and it is always cheap to fix at the moment it is made.
+    """
+    with tempfile.TemporaryDirectory() as workspace:
+        bundle = os.path.join(workspace, "bundle")
+        _write(os.path.join(bundle, CONTENT_DIRECTORY_NAME, "faq.sw-KE.md"), b"# f")
+        try:
+            content_documents(bundle_dir=bundle, supported_locales=["en-GB", "es-ES"])
+        except ValueError as refusal:
+            assert "sw-KE" in str(refusal)
+        else:
+            assert False, "a document nobody could select the language of was accepted"
+
+
+def test_documents_sit_directly_in_the_content_directory():
+    """Nesting cannot carry meaning here: the name is the whole lookup, so a subdirectory
+    would publish files that are never asked for."""
+    with tempfile.TemporaryDirectory() as workspace:
+        bundle = os.path.join(workspace, "bundle")
+        _write(os.path.join(bundle, CONTENT_DIRECTORY_NAME, "en", "faq.md"), b"# f")
+        try:
+            content_documents(bundle_dir=bundle)
+        except ValueError as refusal:
+            assert "directory" in str(refusal)
+        else:
+            assert False, "a nested document directory was accepted"
+
+
+def test_a_documents_directory_is_served_without_caching():
+    """
+    The difference between a document and a logo, as the bucket sees it.
+
+    Both are replaced by deploying again, and both keep their file names when they change. A
+    logo an hour out of date is a cosmetic cost worth paying for a file fetched on every page
+    load. A privacy policy an hour out of date goes on telling people something its publisher
+    has already corrected, and the people most likely to be affected are the ones who read it
+    first.
+    """
+    is_no_cache = _is_no_cache()
+    paths = ["index.html", "data/env.js", "content/"]
+
+    assert is_no_cache("index.html", paths), "an exact entry stopped matching"
+    assert is_no_cache("content/privacy-policy.md", paths), "a document would be cached"
+    assert is_no_cache("content/faq.en-GB.md", paths)
+    assert not is_no_cache("static/js/main.js", paths), "everything is uncached now"
+    assert not is_no_cache("contents.json", paths), (
+        "a directory entry matched a file that merely starts with the same letters")
+    assert not is_no_cache("data/env.json", paths), (
+        "an entry without a trailing slash is being treated as a prefix, so files that merely "
+        "begin with a listed name - data/env.js and data/env.json - are not told apart")
 
 
 if __name__ == "__main__":

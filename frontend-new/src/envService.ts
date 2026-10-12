@@ -46,6 +46,7 @@ export enum EnvVariables {
   FRONTEND_FOOTER_ATTRIBUTION = "FRONTEND_FOOTER_ATTRIBUTION",
   GLOBAL_ENABLE_KNOWLEDGE_HUB = "GLOBAL_ENABLE_KNOWLEDGE_HUB",
   FRONTEND_KNOWLEDGE_HUB_SECTORS = "FRONTEND_KNOWLEDGE_HUB_SECTORS",
+  FRONTEND_CONTENT_DOCUMENTS = "FRONTEND_CONTENT_DOCUMENTS",
 }
 
 export const requiredEnvVariables = [
@@ -463,6 +464,30 @@ export const getKnowledgeHubSectors = (): string[] => {
     return parsed.filter((entry): entry is string => typeof entry === "string");
   } catch (e) {
     console.error(new EnvError("Error parsing FRONTEND_KNOWLEDGE_HUB_SECTORS JSON", e));
+    return [];
+  }
+};
+
+/**
+ * The document files this deployment supplies, by name.
+ *
+ * Worked out at deploy time from the files themselves and written here, because a browser
+ * cannot discover what is in a bucket. The answer is needed before anything renders: whether
+ * this deployment has a FAQ decides whether a route and a menu entry exist at all, and a menu
+ * entry that appears a moment after the page does is worse than one that never appears.
+ */
+export const getContentDocuments = (): string[] => {
+  const raw = getEnv(EnvVariables.FRONTEND_CONTENT_DOCUMENTS);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      console.error(new EnvError("FRONTEND_CONTENT_DOCUMENTS must be a JSON array"));
+      return [];
+    }
+    return parsed.filter((entry): entry is string => typeof entry === "string");
+  } catch (e) {
+    console.error(new EnvError("Error parsing FRONTEND_CONTENT_DOCUMENTS JSON", e));
     return [];
   }
 };

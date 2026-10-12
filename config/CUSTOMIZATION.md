@@ -27,7 +27,8 @@ alternative is a deployment that looks finished while presenting itself as someb
 Two consequences worth knowing before you deploy:
 
 - **Your privacy policy and terms of use are yours to write.** Until you supply them, both
-  pages tell your users so.
+  pages tell your users so. They are files you put in your own configuration directory — see
+  **Legal Documents** — not a change to the product.
 - **The sector knowledge hub and the FAQ are off** until you ask for them. Both carried one
   country's content to every deployment, so neither is something you get by not deciding.
 
@@ -71,6 +72,10 @@ Nothing is committed to Tabiya's repository, and changing an asset costs a redep
 than a rebuild.
 
 A full `https://` URL to an asset you host yourself also works, anywhere a path does.
+
+One name inside `assets/` is reserved: `content/` holds the documents the interface *reads* —
+your privacy policy, terms of use and FAQ — rather than files it links to by URL. See **Legal
+Documents** and **FAQ**.
 
 Images, fonts, icons and text are accepted, up to 25 MB for the directory as a whole — these
 files are served to every visitor on every page load. Anything else is refused by name when
@@ -273,19 +278,24 @@ information. Nothing falls back to another party's documents: a privacy policy n
 organisation accountable for a user's data, and showing one belonging to a party that never
 receives that data is a misstatement rather than a placeholder.
 
-Supplying your own currently requires a frontend build, because the documents are compiled
-into the bundle:
+Supply your own the same way you supply a logo: as files in your `assets/` directory, in a
+`content/` subdirectory.
 
-1. Add two Markdown files to `frontend-new/src/legal/documents/`, each with a `title` in its
-   YAML frontmatter. `{{appName}}` in the body is replaced with `branding.appName`.
-2. Register them in `frontend-new/src/legal/legalDocumentLoader.ts` under
-   `documentsByProductName`, keyed by your `branding.appName` in lower case.
+```
+config-dir/
+  assets/
+    content/
+      privacy-policy.md
+      terms-of-use.md
+```
 
-That is a build-time step in the product repository, which is the opposite of how everything
-else on this page works. Loading these at runtime from your own deployment's assets — so a
-partner supplies them the same way they supply a logo — is the change that retires the
-registry, and the two entries in it today are the deployments that predate configurable legal
-content.
+Each file needs a `title` in its YAML frontmatter, and `{{appName}}` anywhere in the body is
+replaced with `branding.appName`, so the same document follows a rename.
+
+Nothing is registered anywhere and nothing is rebuilt. The deployment reads the directory,
+writes down what it found, and the pages ask for it by name — so adding a document is adding
+a file, and correcting one is replacing a file and deploying again. See **Documents in more
+than one language** below for the naming when you have translations.
 
 ## Features
 
@@ -350,21 +360,48 @@ whether to show them.
 
 ## FAQ
 
-**The FAQ appears only where the deployment has one.** Its documents are matched to the
-deployment by `branding.appName`, the same way legal documents are. With no match there is no
-FAQ page, no navigation entry and no link to one from the sign-in pages.
+**The FAQ appears only where the deployment has one.** Write one by putting `faq.md` in
+`assets/content/`, the same place your legal documents go. Without it there is no FAQ page, no
+navigation entry and no link to one from the sign-in pages — the route does not exist.
 
 This used to be keyed by *locale alone* — no product, no configuration, nothing to override —
 so every deployment served the same forty-odd paragraphs describing one programme, its
 country, its ministry and its funder, in whichever of seven languages the reader had chosen.
 
-Supplying your own currently requires a frontend build, as legal documents do: add
-`frontend-new/src/faq/documents/faq.<locale>.md` and register them in
-`frontend-new/src/faq/faqDocumentLoader.ts` under `FAQ_BY_PRODUCT`, keyed by your
-`branding.appName` in lower case. Loading these from your own assets at runtime is the change
-that retires the registry.
+The document's structure carries its layout:
+
+- `## 1. Getting started` — a numbered section. The number is yours; the contents list follows
+  the order of the file.
+- `### Does it cost anything?` — a question inside that section, with its answer underneath.
+- A section whose body has no `###` questions is rendered as prose.
+- Section **10** is rendered as the troubleshooting checklist, wherever you put it.
 
 `faq.tutorialVideoUrl` — URL of a tutorial video embedded in the FAQ page, if you have one.
+
+## Documents in more than one language
+
+A document name is `<kind>.md` or `<kind>.<locale>.md`, where the kind is one of
+`privacy-policy`, `terms-of-use` or `faq`:
+
+```
+assets/content/
+  privacy-policy.md            served to anyone with no closer match
+  privacy-policy.es-ES.md      served to a reader who has selected Spanish (Spain)
+  faq.en-GB.md
+  faq.sw-KE.md
+```
+
+A reader is given the exact locale if you published it, then any document in the same
+language, then one with no locale in its name, then whatever there is — and that last step is
+written to the browser console, because the only fix for it is publishing the translation.
+
+Two things are refused rather than ignored, when you run `setup_env.py` or inject locally:
+
+- a name that is not one of the above, such as `privacy_policy.md`. It would be uploaded,
+  served, and never asked for — you would see the "not published" page with your own document
+  sitting in the bucket one URL away, and nothing anywhere would say why;
+- a document written for a locale that is not in `i18n.locales`. Nobody could select the
+  language it is in.
 
 ## Writing your own configuration file
 
@@ -407,7 +444,18 @@ lines it does not own are left exactly as they are, comments and all. Run it as 
 like; it is the configuration that is authoritative, not the env file.
 
 Then upload and deploy as usual (`setup_env.py`, then `prepare.py`). Your branding change
-costs a redeploy, not a rebuild.
+costs a redeploy, not a rebuild. This is true of a change made later as well as of the first
+one: the frontend bundle that is downloaded carries no deployment's identity, and everything
+on this page is applied to it at deployment time.
+
+Two things to expect when you change something that was already live:
+
+- **Documents take effect immediately.** `content/` is served with `no-store`, so a corrected
+  privacy policy does not go on showing the old text to the people who read it first.
+- **Images can take up to an hour.** Logos, icons and illustrations are served with the
+  bucket's default cache lifetime, which is the right trade for a file fetched on every page
+  load. A hard reload shows the new one at once; a returning visitor may see the old one for
+  a while.
 
 Two things it refuses rather than letting them fail later:
 
@@ -430,6 +478,22 @@ python3 inject-config.py --config horizonte.json --namespaces branding auth
 ```
 
 Restart the frontend and backend to pick up the new values.
+
+To see your documents locally, copy them where a local run serves them from:
+
+```bash
+cp -R /path/to/config-dir/assets/content frontend-new/public/content
+```
+
+The injector lists whatever it finds there, and refuses the same names a deployment would.
+`frontend-new/public/content/` is ignored by git; remove it when you are done.
+
+## A worked pair
+
+`config/examples/` holds two complete, invented deployments — different names, colours, logos,
+footers, languages, legal documents, and one with a FAQ and one without. They exist to be
+applied one after the other against the same environment, which is the fastest way to see what
+deployment-time configuration actually reaches. See `config/examples/README.md`.
 
 ## Configuration Reference
 

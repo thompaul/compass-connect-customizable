@@ -15,7 +15,7 @@ iac_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # so that we can import the iac/lib module when we run pulumi from withing the iac/frontend directory.
 sys.path.insert(0, iac_folder)
 
-from lib.branding_assets import apply_assets
+from lib.branding_assets import apply_assets, content_documents
 from lib import base64_encode, getenv, get_realm_and_env_name_from_stack, \
     get_pulumi_stack_outputs, construct_artifacts_dir, save_content_in_file, \
     download_generic_artifacts_file, Version
@@ -162,6 +162,16 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
     supported_locales = getenv("FRONTEND_SUPPORTED_LOCALES", False, True)
     default_locale = getenv("FRONTEND_DEFAULT_LOCALE", False, True)
 
+    # The documents this deployment supplies, worked out from the files that are about to be
+    # uploaded. The browser cannot discover them - a bucket has no listing - and it needs the
+    # answer before it renders, because whether there is a FAQ decides whether a route and a
+    # menu entry exist. So the answer travels with everything else it is told at deploy time.
+    documents = content_documents(
+        bundle_dir=artifacts_dir,
+        supported_locales=json.loads(supported_locales))
+    print(f"info: this deployment supplies {len(documents)} document(s): "
+          f"{', '.join(documents) if documents else 'none, so the interface will say so'}")
+
     # features
     features = getenv("FRONTEND_FEATURES", False, False)
     enable_cv_upload: Optional[str] = getenv("GLOBAL_ENABLE_CV_UPLOAD", False, False)
@@ -258,6 +268,7 @@ def _construct_env_js_content(*, artifacts_dir: str, stack_name: str):
         "FRONTEND_GTM_ENABLED": base64_encode(frontend_gtm_enabled or ""),
         "FRONTEND_FAQ_TUTORIAL_VIDEO_URL": base64_encode(frontend_faq_tutorial_video_url or ""),
         "FRONTEND_ILLUSTRATIONS": base64_encode(frontend_illustrations or ""),
+        "FRONTEND_CONTENT_DOCUMENTS": base64_encode(json.dumps(documents)),
     }
 
     env_json_content = f"""window.tabiyaConfig = {json.dumps(frontend_env_json, indent=4)};"""
@@ -321,6 +332,12 @@ def prepare_frontend(
 
     # copy the artifacts to the stack artifacts dir, so that we can make necessary changes to the frontend build bundle.
     stack_artifacts_dir = os.path.join(deployments_dir, stack_artifacts_dir)
+    # Start from the downloaded bundle every time. Copying over whatever was left here by an
+    # earlier preparation would make a deployment the union of its own assets and its
+    # predecessor's: an operator who removes a logo or a document from their configuration
+    # would see the removed one go on being served, with nothing to explain it.
+    if os.path.exists(stack_artifacts_dir):
+        shutil.rmtree(stack_artifacts_dir)
     shutil.copytree(artifacts_dir, stack_artifacts_dir, dirs_exist_ok=True)
 
     # Lay this deployment's own files over the bundle, before the env.js and index.html

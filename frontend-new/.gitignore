@@ -33,3 +33,7 @@ env.js
 
 # Sentry Config File
 .sentryclirc
+
+# A deployment's own documents, copied here to see them locally. They belong to the
+# deployment, not to the product, and never to this repository.
+/public/content/

@@ -1,10 +1,11 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Box, Container, Typography, useTheme } from "@mui/material";
+import { useTranslation } from "react-i18next";
 import MarkdownReader from "src/knowledgeHub/components/MarkdownReader/MarkdownReader";
 import { getProductName } from "src/envService";
-import { getLegalDocument } from "src/legal/legalDocumentLoader";
-import type { LegalDocumentVariant } from "src/legal/legalDocumentLoader";
+import { getNotConfiguredLegalDocument, hasLegalDocument, loadLegalDocument } from "src/legal/legalDocumentLoader";
+import type { LegalDocument, LegalDocumentVariant } from "src/legal/legalDocumentLoader";
 import { routerPaths } from "src/app/routerPaths";
 import { resolveDarkLogoUrl } from "src/branding/brandAssets";
 
@@ -25,9 +26,32 @@ const applyAppNamePlaceholders = (text: string, appName: string): string => text
 
 const LegalDocumentPage: React.FC<LegalDocumentPageProps> = ({ variant }) => {
   const theme = useTheme();
+  const { i18n } = useTranslation();
   const appName = getProductName();
+  const locale = i18n.language;
 
-  const { title, markdown } = useMemo(() => getLegalDocument(variant), [variant]);
+  // A deployment that published nothing renders the placeholder on the first paint: whether
+  // there is a document of its own is known from the configuration, without asking the
+  // network, so there is no reason to show a reader a spinner on the way to an apology.
+  const [legalDocument, setLegalDocument] = useState<LegalDocument>(() =>
+    hasLegalDocument(variant) ? { title: "", markdown: "" } : getNotConfiguredLegalDocument(variant)
+  );
+
+  useEffect(() => {
+    if (!hasLegalDocument(variant)) {
+      setLegalDocument(getNotConfiguredLegalDocument(variant));
+      return;
+    }
+    let cancelled = false;
+    loadLegalDocument(variant, locale).then((loaded) => {
+      if (!cancelled) setLegalDocument(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [variant, locale]);
+
+  const { title, markdown } = legalDocument;
   const markdownWithAppName = useMemo(() => applyAppNamePlaceholders(markdown, appName), [markdown, appName]);
 
   const logoSrc = resolveDarkLogoUrl();

@@ -1,9 +1,29 @@
 import json
 import argparse
+import importlib.util
 import sys
 import re
 from pathlib import Path
 from typing import Dict, Any, NamedTuple, Optional, Iterable, Tuple
+
+
+def _load_branding_assets():
+    """
+    The deployment's own module, loaded by path.
+
+    What a document may be called, and which names a deployment will ever ask for, is decided
+    in one place and used in two: here, for the env.js a developer runs against, and in
+    `prepare_frontend.py`, for the one a deployment serves. Two copies of a naming convention
+    is how a document ends up working on a laptop and invisible in production.
+
+    By path rather than as `lib.branding_assets`, because that package's __init__ imports
+    pulumi, which this script has no business requiring.
+    """
+    path = Path(__file__).resolve().parent.parent / 'iac' / 'lib' / 'branding_assets.py'
+    spec = importlib.util.spec_from_file_location('branding_assets', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 DEFAULT_BACKEND_ENV_PATH = '../backend/.env'
@@ -176,6 +196,7 @@ FRONTEND_JSON_FIELDS = {
     'FRONTEND_ILLUSTRATIONS',
     'FRONTEND_PARTNER_LOGOS',
     'FRONTEND_KNOWLEDGE_HUB_SECTORS',
+    'FRONTEND_CONTENT_DOCUMENTS',
     # Add more JSON.stringify fields here
 }
 
@@ -368,6 +389,19 @@ def format_frontend_replacement(key: str, raw_value: Any, existing_content: str)
     return f'{key}: btoa("{rendered}"),', 0
 
 
+def local_content_documents(env_js_path: Path, config: Dict[str, Any]) -> list:
+    """The documents a local run will serve, from `public/content/` beside the env.js."""
+    branding_assets = _load_branding_assets()
+    public_dir = env_js_path.parent.parent
+    try:
+        return branding_assets.content_documents(
+            bundle_dir=str(public_dir),
+            supported_locales=derive_supported_locales(config))
+    except ValueError as refusal:
+        print(f"Error: {refusal}")
+        sys.exit(1)
+
+
 def update_frontend_env(config: Dict[str, Any], env_js_path: Path, namespaces: Optional[Iterable[str]] = None):
     if not env_js_path.exists():
         print(f"Error: Frontend env.js file not found at '{env_js_path}'")
@@ -376,6 +410,14 @@ def update_frontend_env(config: Dict[str, Any], env_js_path: Path, namespaces: O
     content = env_js_path.read_text()
 
     updates = build_env_updates(config, FRONTEND_ENV_MAP, namespaces)
+
+    # Not configured anywhere: worked out from the documents actually sitting in `public/`,
+    # exactly as a deployment works it out from the documents it is about to upload. A
+    # developer who drops their privacy policy in `public/content/` sees it, and a developer
+    # who misnames it is told so here rather than three deployment steps later.
+    if namespaces is None or 'i18n' in namespaces or 'branding' in namespaces:
+        updates['FRONTEND_CONTENT_DOCUMENTS'] = local_content_documents(env_js_path, config)
+
     if not updates:
         return
 

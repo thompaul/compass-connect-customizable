@@ -55,6 +55,8 @@ DERIVED_AT_DEPLOY_TIME = {
     "FIREBASE_API_KEY": "an output of the auth stack",
     "FIREBASE_AUTH_DOMAIN": "an output of the auth stack",
     "ADMIN_FRONTEND_FIREBASE_PROJECT_ID": "the environment's own project id",
+    "FRONTEND_CONTENT_DOCUMENTS": "read from the documents the operator put in assets/content, "
+                                  "so there is nothing for them to also write down",
 }
 
 

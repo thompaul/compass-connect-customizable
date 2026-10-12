@@ -20,6 +20,7 @@ jest.mock("src/envService", () => ({
   getFooterAttribution: jest.fn(() => ""),
   getKnowledgeHubEnabled: jest.fn(() => false),
   getKnowledgeHubSectors: jest.fn(() => []),
+  getContentDocuments: jest.fn(() => []),
   getBrowserTabTitle: jest.fn(() => "Mocked Browser Tab Title"),
   getMetaDescription: jest.fn(() => "Mocked Meta Description"),
   getSeoEnvVar: jest.fn(() => "{}"),

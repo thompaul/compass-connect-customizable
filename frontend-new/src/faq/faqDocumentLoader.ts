@@ -1,49 +1,24 @@
-import { getProductName } from "src/envService";
 import { parseYamlFrontmatter } from "src/utils/parseYamlFrontmatter";
-
-import faqEnGbMd from "!!raw-loader!./documents/faq.en-GB.md";
-import faqEnUsMd from "!!raw-loader!./documents/faq.en-US.md";
-import faqEsEsMd from "!!raw-loader!./documents/faq.es-ES.md";
-import faqEsArMd from "!!raw-loader!./documents/faq.es-AR.md";
-import faqNyZmMd from "!!raw-loader!./documents/faq.ny-ZM.md";
-import faqSwKeMd from "!!raw-loader!./documents/faq.sw-KE.md";
-import faqPtMzMd from "!!raw-loader!./documents/faq.pt-MZ.md";
+import { hasDocument, loadDocument } from "src/content/deploymentDocuments";
 
 /** Section number for the troubleshooting checklist in all FAQ locale documents. */
 export const CHECKLIST_SECTION_NUMBER = 10;
 
 /**
- * The FAQ documents belonging to the deployments that wrote them, keyed by the product name
- * each one deploys under and then by locale.
+ * Whether this deployment has a FAQ at all, from the list of documents it published.
  *
- * The outer key is the whole point of this change. These documents were keyed by locale
- * alone, so **every** deployment served them: forty-odd paragraphs per language opening
- * "Njila is a free AI career guidance platform built for the Zambian youth, supported by a
- * collaboration between the Ministry of Technical and Vocational Skills Development (MoTS)
- * of Zambia and the World Bank Group." No configuration changed it, because none was
- * consulted. It was not a default a deployment could override - it was the only answer.
+ * The FAQ used to be seven markdown files compiled into the bundle and keyed by locale
+ * alone - no product, no configuration, nothing to override. So every deployment served
+ * forty-odd paragraphs opening "Njila is a free AI career guidance platform built for the
+ * Zambian youth, supported by a collaboration between the Ministry of Technical and
+ * Vocational Skills Development (MoTS) of Zambia and the World Bank Group", in whichever of
+ * seven languages the reader had chosen. It was not a default a deployment could override;
+ * it was the only answer.
  *
- * A deployment whose name is not here has no FAQ, and `app/index.tsx` registers no route for
- * one. Loading these at runtime from the deployment's own assets, the way its logo now
- * arrives, is the change that retires this map.
+ * A deployment now has the FAQ it wrote, and a deployment that wrote none has none: nothing
+ * links to it and `app/index.tsx` registers no route for it.
  */
-const FAQ_BY_PRODUCT: Record<string, Record<string, string>> = {
-  njila: {
-    "en-GB": faqEnGbMd,
-    "en-US": faqEnUsMd,
-    "es-ES": faqEsEsMd,
-    "es-AR": faqEsArMd,
-    "ny-ZM": faqNyZmMd,
-    "sw-KE": faqSwKeMd,
-    "pt-MZ": faqPtMzMd,
-  },
-};
-
-const faqForThisDeployment = (): Record<string, string> | undefined =>
-  FAQ_BY_PRODUCT[getProductName().toLowerCase()];
-
-/** Whether this deployment has a FAQ at all. Nothing links to one that does not exist. */
-export const hasFaqDocument = (): boolean => faqForThisDeployment() !== undefined;
+export const hasFaqDocument = (): boolean => hasDocument("faq");
 
 export interface FaqQuestion {
   id: string;
@@ -135,13 +110,16 @@ export const parseSections = (markdown: string): FaqSection[] => {
   });
 };
 
-export const getFaqDocument = (locale?: string): FaqDocument => {
-  const documents = faqForThisDeployment();
-  if (!documents) {
-    // Reached only if something links to the FAQ without checking hasFaqDocument first.
-    return { title: "", sections: [] };
-  }
-  const markdown = (locale && documents[locale]) ?? Object.values(documents)[0];
+/**
+ * This deployment's FAQ in the reader's language, or null when there is nothing to show.
+ *
+ * Null covers both "this deployment published no FAQ" and "the document could not be read".
+ * The caller renders the same thing for each, because a reader can act on neither.
+ */
+export const loadFaqDocument = async (locale?: string): Promise<FaqDocument | null> => {
+  const markdown = await loadDocument("faq", locale);
+  if (markdown === null) return null;
+
   const { data, content } = parseYamlFrontmatter(markdown);
   return {
     title: data.title,

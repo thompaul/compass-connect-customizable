@@ -184,6 +184,22 @@ def _upload_file(*,
                 pulumi.warn(f"Failed to cleanup temp file {temp_file_path}: {cleanup_error}")
 
 
+def _is_no_cache(file_path: str, no_cache_paths: list[str]) -> bool:
+    """
+    Whether this file is one the browser must ask for again every time.
+
+    An entry ending in `/` means the directory and everything under it. Documents are the
+    reason: they are a deployment's own words, changed by re-running a deployment rather than
+    by rebuilding, and they keep their file names when they change. Cached for the bucket's
+    default hour, a corrected privacy policy would go on showing the old text to everyone who
+    had already read it, which is the one audience it matters most for.
+    """
+    if file_path in no_cache_paths:
+        return True
+    normalised = file_path.replace(os.sep, "/")
+    return any(normalised.startswith(entry) for entry in no_cache_paths if entry.endswith("/"))
+
+
 def _get_id() -> str:
     """
     Generates a random ID for the Bucket content Resource
@@ -330,7 +346,7 @@ class BucketContentProvider(ResourceProvider):
             file_uploaded = _upload_file(bucket=bucket,
                                          source_file_path=file_path,
                                          bucket_file_path=bucket_file_path,
-                                         do_not_cache=(file in props.no_cache_paths))
+                                         do_not_cache=_is_no_cache(file, props.no_cache_paths))
             if file_uploaded:
                 success_count += 1
                 pulumi.info(f"Uploaded: {bucket_file_path}")
@@ -377,7 +393,7 @@ class BucketContentProvider(ResourceProvider):
             is_file_uploaded = _upload_file(bucket=bucket,
                                             source_file_path=file_path,
                                             bucket_file_path=bucket_file_path,
-                                            do_not_cache=(file in _new_props.no_cache_paths))
+                                            do_not_cache=_is_no_cache(file, _new_props.no_cache_paths))
             if is_file_uploaded:
                 upload_success_count += 1
                 pulumi.info(f"Uploaded: {bucket_file_path}")

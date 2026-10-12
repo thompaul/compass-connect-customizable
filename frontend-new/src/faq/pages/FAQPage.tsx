@@ -1,10 +1,10 @@
 import React, { startTransition, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Box, InputAdornment, TextField, Typography, useTheme } from "@mui/material";
+import { Box, CircularProgress, InputAdornment, TextField, Typography, useTheme } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { getFaqDocument, type FaqSection } from "src/faq/faqDocumentLoader";
+import { loadFaqDocument, type FaqDocument, type FaqSection } from "src/faq/faqDocumentLoader";
 import HighlightedMarkdown from "src/faq/components/HighlightedMarkdown";
 import FaqAccordionItem from "src/faq/components/FaqAccordionItem";
 import FaqTableOfContents from "src/faq/components/FaqTableOfContents";
@@ -28,6 +28,8 @@ export const DATA_TEST_ID = {
   FAQ_PAGE_SECTION: `faq-page-section-${uniqueId}`,
   FAQ_PAGE_NO_RESULTS: `faq-page-no-results-${uniqueId}`,
   FAQ_PAGE_PROGRESS_BAR: `faq-page-progress-bar-${uniqueId}`,
+  FAQ_PAGE_LOADING: `faq-page-loading-${uniqueId}`,
+  FAQ_PAGE_UNAVAILABLE: `faq-page-unavailable-${uniqueId}`,
 };
 
 const containsQuery = (haystack: string, needle: string): boolean => haystack.toLowerCase().includes(needle);
@@ -45,7 +47,27 @@ const FAQPage: React.FC = () => {
   const isOnline = useContext(IsOnlineContext);
   const user = authenticationStateService.getInstance().getUser();
 
-  const { title, sections } = useMemo(() => getFaqDocument(i18n.language), [i18n.language]);
+  // The document is this deployment's own file, fetched from its bucket rather than compiled
+  // in, so it arrives after the first render. The route only exists when the deployment
+  // published a FAQ, so "unavailable" here means the read failed, not that there is none.
+  const [faqDocument, setFaqDocument] = useState<FaqDocument | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    loadFaqDocument(i18n.language).then((loaded) => {
+      if (cancelled) return;
+      setFaqDocument(loaded);
+      setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [i18n.language]);
+
+  const title = faqDocument?.title ?? "";
+  const sections = useMemo<FaqSection[]>(() => faqDocument?.sections ?? [], [faqDocument]);
 
   const [searchInput, setSearchInput] = useState("");
   const normalizedQuery = searchInput.trim().toLowerCase();
@@ -62,7 +84,13 @@ const FAQPage: React.FC = () => {
   }, [tutorialUnavailable]);
 
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(sections.length > 0 ? sections[0].id : null);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+
+  // Seeded once the document arrives, so the contents list highlights its first entry
+  // before the reader has scrolled anywhere.
+  useEffect(() => {
+    setActiveSectionId(sections.length > 0 ? sections[0].id : null);
+  }, [sections]);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
   // Track scroll progress (0..1) across the document.
@@ -391,6 +419,26 @@ const FAQPage: React.FC = () => {
         <FaqTableOfContents sections={sections} activeSectionId={activeSectionId} onLinkClick={setActiveSectionId} />
 
         <Box sx={{ minWidth: 0, maxWidth: "880px" }}>
+          {isLoading && (
+            <Box
+              data-testid={DATA_TEST_ID.FAQ_PAGE_LOADING}
+              role="status"
+              aria-live="polite"
+              sx={{ display: "flex", justifyContent: "center", padding: "48px 0" }}
+            >
+              <CircularProgress />
+            </Box>
+          )}
+
+          {!isLoading && faqDocument === null && (
+            <Box
+              data-testid={DATA_TEST_ID.FAQ_PAGE_UNAVAILABLE}
+              sx={{ padding: "24px 0", color: theme.palette.text.secondary }}
+            >
+              {t("common.errors.generic")}
+            </Box>
+          )}
+
           {noResults && (
             <Box
               data-testid={DATA_TEST_ID.FAQ_PAGE_NO_RESULTS}

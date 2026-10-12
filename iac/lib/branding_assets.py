@@ -22,8 +22,19 @@ Nothing new is created, and nothing new has to be destroyed.
 
 Assets are versioned with the artifacts, like the environment file in Secret Manager: a
 deployment pinned to a version gets the branding that was uploaded for it.
+
+One subdirectory is special. Everything in `assets/` replaces a file in the bundle by name -
+a logo, an illustration - and the interface reaches it through a URL an operator configured.
+`assets/content/` holds the documents the interface *reads*: the privacy policy, the terms of
+use, the FAQ. Nothing configures a URL for those, so the deployment has to say which ones it
+has, which is what `content_documents` works out and `prepare_frontend` writes into `env.js`.
+
+It is worked out from the files rather than declared beside them on purpose. A list an
+operator maintains by hand next to the files it describes is a list that goes stale, and the
+failure is invisible: a privacy policy that was uploaded and never shown.
 """
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -45,6 +56,20 @@ ALLOWED_SUFFIXES = {
     ".woff", ".woff2", ".ttf", ".otf",
     ".md", ".txt", ".json", ".webmanifest",
 }
+
+#: Inside the assets directory: the documents the interface reads rather than links to.
+CONTENT_DIRECTORY_NAME = "content"
+
+#: What a document may be called. The kind is the stem and the locale is an optional middle
+#: part, so `privacy-policy.md` serves every language and `privacy-policy.sw-KE.md` serves one.
+#:
+#: Matched strictly, and a file that does not match is an error rather than a file that is
+#: ignored. `privacy_policy.md` with an underscore would be uploaded, served, and never
+#: looked for - an operator would see the "not configured" page with their document sitting
+#: in the bucket a URL away, and nothing anywhere would say why.
+CONTENT_DOCUMENT_KINDS = ("privacy-policy", "terms-of-use", "faq")
+CONTENT_DOCUMENT_NAME = re.compile(
+    r"^(?P<kind>" + "|".join(CONTENT_DOCUMENT_KINDS) + r")(?:\.(?P<locale>[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*))?\.md$")
 
 
 def branding_archive_name(stack_name: str) -> str:
@@ -160,6 +185,52 @@ def apply_assets(*, iac_folder: str, stack_name: str, artifacts_dir: str) -> Opt
 
     print(f"info: applied {applied} asset file(s) supplied by this deployment")
     return applied
+
+
+def content_documents(*, bundle_dir: str, supported_locales: Optional[list] = None) -> list:
+    """
+    The documents this deployment supplies, as the browser will have to ask for them.
+
+    Read from the prepared bundle rather than from the operator's directory, so what is
+    reported is what will actually be served: a file the operator put there and a file the
+    product shipped are indistinguishable by the time this runs, which is correct, because
+    they are indistinguishable to the browser too.
+
+    Raises on a file it cannot account for. A misnamed document is the quietest failure in
+    this whole path - it uploads, it is served, and nothing ever asks for it - so it is the
+    one worth refusing a deployment over.
+    """
+    content_dir = os.path.join(bundle_dir, CONTENT_DIRECTORY_NAME)
+    if not os.path.isdir(content_dir):
+        return []
+
+    documents = []
+    for entry in sorted(os.listdir(content_dir)):
+        if entry.startswith("."):
+            continue
+        if os.path.isdir(os.path.join(content_dir, entry)):
+            raise ValueError(
+                f"{CONTENT_DIRECTORY_NAME}/{entry} is a directory. Documents are looked up by "
+                f"name, so they all sit directly in {CONTENT_DIRECTORY_NAME}/.")
+
+        match = CONTENT_DOCUMENT_NAME.match(entry)
+        if not match:
+            raise ValueError(
+                f"{CONTENT_DIRECTORY_NAME}/{entry} is not a name this deployment will ever ask "
+                f"for, so it would be published and never shown. Documents are named "
+                f"<kind>.md or <kind>.<locale>.md, where <kind> is one of: "
+                f"{', '.join(CONTENT_DOCUMENT_KINDS)}.")
+
+        locale = match.group("locale")
+        if locale and supported_locales is not None and locale not in supported_locales:
+            raise ValueError(
+                f"{CONTENT_DIRECTORY_NAME}/{entry} is written for '{locale}', which this "
+                f"deployment does not offer ({', '.join(supported_locales) or 'no locales'}). "
+                f"Nobody could select the language it is in.")
+
+        documents.append(entry)
+
+    return documents
 
 
 def upload_generic_artifacts_file(*, repository: dict, file_path: str, version: str) -> None:

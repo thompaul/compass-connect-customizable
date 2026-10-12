@@ -44,22 +44,14 @@ FUNDER_ASSET_TERMS = PARTNER_TERMS + ("tabiya-logo", "tabiya_logo", "google.org"
 #: content rather than a default anybody inherits. The reason is the point: without one,
 #: this list is just a way of not fixing things.
 SOURCE_EXEMPTIONS = {
-    "frontend-new/src/legal/legalDocumentLoader.ts":
-        "a compatibility shim keyed by product name, so the two deployments that predate "
-        "configurable legal content keep theirs; the default resolves to a placeholder",
     "frontend-new/src/knowledgeHub/components/SectorProfile/sectorStaticData.ts":
         "one country's sector catalogue. Which of its pages appear is now configuration, and "
         "the whole feature is off unless asked for, but the prose itself is still that "
         "country's and is still in the bundle - that is the next phase's content work",
     "frontend-new/src/faq/faqDocumentLoader.ts":
-        "a compatibility shim keyed by product name, so the deployment that wrote these FAQ "
-        "documents keeps them; a deployment not named here has no FAQ and no route to one",
+        "the comment recording what this file used to do, which named the deployment whose "
+        "FAQ every other deployment served; the code under it loads documents by name",
 }
-
-#: Directories of partner-authored prose. Making these supplied per deployment rather than
-#: compiled into the bundle is the content-bundle work of the next phase.
-CONTENT_DIRECTORIES = ("frontend-new/src/legal/documents",
-                       "frontend-new/src/faq/documents")
 
 #: Locale files carry translations, and in Chichewa "njila"/"njira" is the ordinary word
 #: for a path or a way. A brand check cannot tell the two apart, so it does not try.
@@ -162,7 +154,7 @@ def test_no_source_fallback_resolves_to_a_partner():
             relative = _relative(path)
             if relative in SOURCE_EXEMPTIONS:
                 continue
-            if LOCALE_DIRECTORY in path or any(relative.startswith(d) for d in CONTENT_DIRECTORIES):
+            if LOCALE_DIRECTORY in path:
                 continue
             try:
                 source = open(path, encoding="utf-8").read().lower()
@@ -209,6 +201,31 @@ def test_an_unconfigured_deployment_shows_no_partner_legal_documents():
         "must be told it has published none, not handed another organisation's.")
 
 
+def test_the_placeholder_legal_pages_say_a_deployment_has_published_none():
+    """
+    What the two compiled-in pages actually say, checked here because nothing else can.
+
+    The browser tests can only check which document is chosen: under that runner a markdown
+    import resolves to its own file name, not its contents. These two files are the pages a
+    user sees when a deployment has published no legal documents, so their text is the whole
+    point of them.
+    """
+    expected = {
+        "privacy-policy-not-configured.md": "has not published a privacy policy",
+        "terms-of-use-not-configured.md": "has not published terms of use",
+    }
+    for filename, statement in expected.items():
+        path = os.path.join(_REPO, "frontend-new/src/legal/documents", filename)
+        assert os.path.exists(path), f"{filename} is gone; there is no page to show"
+        text = open(path, encoding="utf-8").read()
+        assert statement in text, (
+            f"{filename} no longer says '{statement}'. A reader has to be told that nobody has "
+            "published this, or the empty page reads as an oversight rather than a fact.")
+        assert "{{appName}}" in text, (
+            f"{filename} names a deployment literally instead of using the placeholder, so "
+            "every deployment would show whatever name is written in it.")
+
+
 def test_the_faq_is_not_served_to_every_deployment():
     """
     The largest instance of the whole problem, and the only one that was not a fallback.
@@ -221,12 +238,64 @@ def test_the_faq_is_not_served_to_every_deployment():
     """
     loader = os.path.join(_REPO, "frontend-new/src/faq/faqDocumentLoader.ts")
     source = open(loader, encoding="utf-8").read()
-    assert "FAQ_BY_LOCALE" not in source, (
-        "the FAQ is keyed by locale alone again, which means every deployment serves "
-        "whatever these documents happen to say")
+    assert "raw-loader" not in source, (
+        "the FAQ is compiled into the bundle again, so whatever it says is what every "
+        "deployment that enables it will say")
     assert "hasFaqDocument" in source, (
         "nothing can ask whether this deployment has a FAQ, so something will link to one "
         "that does not exist")
+
+
+def test_no_partner_prose_is_compiled_into_a_browser_bundle():
+    """
+    The documents themselves, not the code that chose between them.
+
+    A loader keyed by product name stops *selecting* another organisation's prose; it does
+    not stop that prose being downloaded by every user of every deployment. These documents
+    were about 300 KB of one country's programme, and they shipped to all of them.
+
+    Translations are excluded for the reason given at LOCALE_DIRECTORY, and the two
+    placeholder legal pages are not excluded - they name no partner, which is their point.
+    """
+    offenders = {}
+    for root in SOURCE_ROOTS:
+        for path in _walk(root):
+            if not path.endswith(".md") or LOCALE_DIRECTORY in path:
+                continue
+            try:
+                text = open(path, encoding="utf-8").read().lower()
+            except UnicodeDecodeError:
+                continue
+            hits = sorted({term for term in PARTNER_TERMS if term in text})
+            if hits:
+                offenders[_relative(path)] = hits
+    assert not offenders, (
+        "these documents name a partner and are compiled into a browser bundle:\n"
+        + "\n".join(f"    {p}  ({', '.join(h)})" for p, h in sorted(offenders.items()))
+        + "\nA deployment's own documents go in its assets/content directory.")
+
+
+def test_a_deployment_reads_its_documents_rather_than_shipping_them():
+    """
+    The mechanism, stated so it cannot be quietly replaced by a bigger lookup table.
+
+    Every version of this fault was the same shape: a map in the source from some key to
+    some organisation's words. Product name, locale, country - the key changed, the fault
+    did not. There is now no map, because there are no words in the source to put in one.
+    """
+    documents = os.path.join(_REPO, "frontend-new/src/content/deploymentDocuments.ts")
+    assert os.path.exists(documents), (
+        "the module that fetches a deployment's own documents is gone; something has gone "
+        "back to compiling them in")
+
+    legal = open(os.path.join(_REPO, "frontend-new/src/legal/legalDocumentLoader.ts"),
+                 encoding="utf-8").read()
+    compiled_in = re.findall(r'!!raw-loader!\./documents/([^"\']+)', legal)
+    assert sorted(compiled_in) == ["privacy-policy-not-configured.md",
+                                   "terms-of-use-not-configured.md"], (
+        f"the legal loader compiles in {sorted(compiled_in)}. Only the two placeholders "
+        "belong in the bundle: they are what a deployment shows when it has published "
+        "nothing, so they are the one thing that must not depend on a request succeeding.")
 
 
 def test_the_sector_catalogue_is_not_selected_by_product_name():
