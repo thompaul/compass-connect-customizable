@@ -189,11 +189,13 @@ def test_the_json_values_survive_the_round_trip():
     theme = {"brand-primary": "27 79 114", "font-heading": '"Bricolage Grotesque", sans-serif'}
     locales = ["pt-MZ", "en-US"]
     with tempfile.TemporaryDirectory() as directory:
+        # Every mapped variable, because setting one namespace can derive several.
         template = _write(directory, "env.template",
-                          "FRONTEND_THEME_CSS_VARIABLES=/.*/\nFRONTEND_SUPPORTED_LOCALES=/.*/\n")
+                          "\n".join(f"{name}=/.*/" for name in inject.deployment_env_map()) + "\n")
         env_file = _write(directory, ".env.realm.prod", "")
         inject.update_deployment_env(
-            {"branding": {"theme": theme}, "i18n": {"ui": {"supportedLocales": locales}}},
+            {"branding": {"theme": theme},
+             "i18n": {"defaultLocale": "pt-MZ", "locales": [{"locale": name} for name in locales]}},
             inject.Path(env_file), inject.Path(template))
         values = dotenv_values(env_file)
 
@@ -210,6 +212,88 @@ def test_the_shipped_defaults_are_a_valid_starting_point():
         inject.format_deployment_env_value(key, inject.coerce_env_value(raw) or "")
 
 
+def _derive(config):
+    """Build the deployment's env updates for one configuration, as the injector would."""
+    return inject.build_env_updates(config, inject.deployment_env_map(), None)
+
+
+def test_language_is_declared_once_and_arrives_in_both_shapes():
+    """
+    The menu and the agent are built from the same sentence.
+
+    They used to be two settings in two shapes - a list of locales for the browser, a
+    structured value with per-locale date formats for the backend - and nothing compared
+    them, so a locale could be in the menu and missing from the agent.
+    """
+    updates = _derive({"i18n": {
+        "defaultLocale": "pt-MZ",
+        "locales": [{"locale": "pt-MZ", "dateFormat": "DD/MM/YYYY"},
+                    {"locale": "en-US", "dateFormat": "YYYY/MM/DD"}],
+    }})
+
+    assert updates["FRONTEND_DEFAULT_LOCALE"] == "pt-MZ"
+    assert updates["FRONTEND_SUPPORTED_LOCALES"] == ["pt-MZ", "en-US"]
+    assert updates["BACKEND_LANGUAGE_CONFIG"] == {
+        "default_locale": "pt-MZ",
+        "available_locales": [{"locale": "pt-MZ", "date_format": "DD/MM/YYYY"},
+                              {"locale": "en-US", "date_format": "YYYY/MM/DD"}],
+    }, "the backend's shape disagrees with the menu built from the same declaration"
+
+
+def test_the_menu_and_the_agent_cannot_be_given_different_locales():
+    """The property that matters, asserted rather than assumed from the shapes above."""
+    updates = _derive({"i18n": {
+        "defaultLocale": "en-US",
+        "locales": [{"locale": "en-US"}, {"locale": "sw-KE"}, {"locale": "es-AR"}],
+    }})
+    menu = set(updates["FRONTEND_SUPPORTED_LOCALES"])
+    agent = {entry["locale"] for entry in updates["BACKEND_LANGUAGE_CONFIG"]["available_locales"]}
+    assert menu == agent, f"menu offers {sorted(menu)}, agent supports {sorted(agent)}"
+    assert updates["FRONTEND_DEFAULT_LOCALE"] == updates["BACKEND_LANGUAGE_CONFIG"]["default_locale"]
+
+
+def test_a_default_locale_nobody_can_select_is_refused():
+    """A default outside the list is the backend refusing to start, found at deploy."""
+    try:
+        _derive({"i18n": {"defaultLocale": "fr-FR", "locales": [{"locale": "en-US"}]}})
+    except SystemExit as exit_code:
+        assert exit_code.code != 0
+    else:
+        assert False, "a default locale outside the declared list was accepted"
+
+
+def test_the_superseded_two_part_shape_is_refused_rather_than_ignored():
+    """
+    The old shape would otherwise map to nothing, and a deployment whose language silently
+    stopped being configured reads as a deployment that was never configured.
+    """
+    try:
+        _derive({"i18n": {"ui": {"defaultLocale": "en-US", "supportedLocales": ["en-US"]},
+                          "conversation": {"default_locale": "en-US", "available_locales": []}}})
+    except SystemExit as exit_code:
+        assert exit_code.code != 0
+    else:
+        assert False, "the superseded i18n shape was accepted and quietly produced nothing"
+
+
+def test_a_locale_listed_twice_is_refused():
+    """Duplicates reach the menu as duplicates, which looks like a rendering bug."""
+    try:
+        _derive({"i18n": {"defaultLocale": "en-US",
+                          "locales": [{"locale": "en-US"}, {"locale": "en-US"}]}})
+    except SystemExit as exit_code:
+        assert exit_code.code != 0
+    else:
+        assert False, "a duplicate locale was accepted"
+
+
+def test_a_deployment_that_says_nothing_about_language_gets_nothing_derived():
+    """Deriving an empty language config would be worse than deriving none."""
+    updates = _derive({"branding": {"appName": "Horizonte"}})
+    for key in ("FRONTEND_DEFAULT_LOCALE", "FRONTEND_SUPPORTED_LOCALES", "BACKEND_LANGUAGE_CONFIG"):
+        assert key not in updates, f"{key} was derived from a configuration that set no locales"
+
+
 if __name__ == "__main__":
     _failed = _skipped = 0
     for _name, _test in sorted(globals().items()):
@@ -224,6 +308,11 @@ if __name__ == "__main__":
         except AssertionError as _e:
             _failed += 1
             print(f"FAIL {_name}:\n  {_e}")
+        except SystemExit as _e:
+            # The injector exits on bad configuration. A test that did not expect that must
+            # be reported, not allowed to end the run before the summary is printed.
+            _failed += 1
+            print(f"FAIL {_name}: exited with code {_e.code}")
         except Exception as _e:  # noqa: BLE001 - a test that raises is a test that failed
             _failed += 1
             print(f"FAIL {_name}: raised {type(_e).__name__}: {_e}")

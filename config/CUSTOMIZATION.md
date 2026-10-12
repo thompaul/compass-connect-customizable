@@ -139,16 +139,47 @@ After changing colors, verify text contrast meets WCAG AA
 
 ## Languages & Translations
 
-### Enabling Languages
+**Declare your locales once.** The language menu and the agent's conversational support are
+built from the same list, so they cannot be told different things:
 
-- `i18n.ui.defaultLocale` — language that loads by default
-- `i18n.ui.supportedLocales` — list of languages shown in the language switcher
-- `i18n.conversation.default_locale` — default language for the AI conversation
-- `i18n.conversation.available_locales` — languages available for the AI conversation
+```json
+"i18n": {
+  "defaultLocale": "pt-MZ",
+  "locales": [
+    { "locale": "pt-MZ", "dateFormat": "DD/MM/YYYY" },
+    { "locale": "en-US", "dateFormat": "YYYY/MM/DD" }
+  ]
+}
+```
+
+- `defaultLocale` — the language a new user sees. It has to be one of the locales below; a
+  default nobody can select is refused when you run the injector.
+- `locales` — every language this deployment offers, in menu order. `dateFormat` is the
+  agent's; it defaults to `YYYY/MM/DD`.
+
+This was previously two settings in two shapes — `i18n.ui` for the browser and
+`i18n.conversation` for the backend — which nothing compared. A locale could be in the menu
+and missing from the agent, and that is exactly what happened: `ny-ZM` was selectable in the
+interface while the backend could not converse in it, and the partner runbook carried a line
+telling operators not to choose it. The old shape is now refused rather than silently
+producing nothing.
+
+### Which locales are available
+
+`en-US`, `en-GB`, `es-ES`, `es-AR`, `sw-KE`, `pt-MZ`. Every one of them works in all three
+tiers; `iac/test_locales.py` fails the build if that stops being true.
+
+`ny-ZM` is translated in the interface and **not offered**, because the agent has no
+conversational support for Chichewa. It stays in the code so that re-enabling it is one line
+once the backend can hold the conversation.
 
 ### Adding or Translating a Language
 
-To add a new language or update existing translations, see the [Language Guide](../add-a-new-language.md).
+Translating the interface is not the same as adding a language. The interface strings live in
+`frontend-new/src/i18n/locales/<locale>/translation.json`; the agent's conversational ability
+is prompts and per-language guidance in the backend, and learning content exists in fewer
+languages still. A language is available when all three are true — which is what the gate
+above enforces, so a half-finished language fails a test rather than reaching users.
 
 ## Localizing for Your National Context
 

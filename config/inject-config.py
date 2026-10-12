@@ -3,7 +3,7 @@ import argparse
 import sys
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional, Iterable, Tuple
+from typing import Dict, Any, NamedTuple, Optional, Iterable, Tuple
 
 
 DEFAULT_BACKEND_ENV_PATH = '../backend/.env'
@@ -15,11 +15,96 @@ DEFAULT_DEFAULTS_PATH = Path(__file__).resolve().parent / 'default.json'
 #: Where the deployment pipeline reads the variables it validates and uploads.
 DEFAULT_ENV_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / 'iac' / 'templates' / 'env.template'
 
+class Derived(NamedTuple):
+    """
+    A variable computed from the configuration rather than copied out of it.
+
+    Language is the reason this exists. It was configured twice, in two shapes: a list of
+    locales for the two browser tiers, and a separate structured value carrying the default
+    locale and per-locale date formats for the backend. Nothing compared them, so a locale
+    could be offered in the menu and missing from the agent, which is exactly what happened.
+
+    `namespace` is the top-level configuration key this is computed from, so `--namespaces`
+    still selects it the way it selects a plain mapping.
+    """
+    namespace: str
+    compute: Any
+
+
+def _locales(config: Dict[str, Any]) -> list:
+    """The deployment's declared locales, validated as a set before anything is derived."""
+    i18n = config.get("i18n") or {}
+    if "ui" in i18n or "conversation" in i18n:
+        print("Error: the i18n namespace now declares locales once, as "
+              "{'defaultLocale': ..., 'locales': [{'locale': ..., 'dateFormat': ...}]}.")
+        print("       It used to be split into 'ui' and 'conversation', which could disagree "
+              "- a locale offered in the menu that the agent could not converse in.")
+        sys.exit(1)
+
+    locales = i18n.get("locales") or []
+    if not locales:
+        return []
+
+    names = []
+    for entry in locales:
+        if not isinstance(entry, dict) or not entry.get("locale"):
+            print(f"Error: every entry in i18n.locales needs a 'locale'; got {entry!r}")
+            sys.exit(1)
+        names.append(entry["locale"])
+
+    duplicates = {name for name in names if names.count(name) > 1}
+    if duplicates:
+        print(f"Error: i18n.locales lists {', '.join(sorted(duplicates))} more than once.")
+        sys.exit(1)
+
+    default = i18n.get("defaultLocale")
+    if default and default not in names:
+        print(f"Error: i18n.defaultLocale is '{default}', which is not in i18n.locales "
+              f"({', '.join(names)}). A default nobody can select is not a default.")
+        sys.exit(1)
+
+    return locales
+
+
+def derive_default_locale(config: Dict[str, Any]) -> Optional[str]:
+    _locales(config)  # validated here too, so the error arrives however this is reached
+    return (config.get("i18n") or {}).get("defaultLocale")
+
+
+def derive_supported_locales(config: Dict[str, Any]) -> Optional[list]:
+    locales = _locales(config)
+    return [entry["locale"] for entry in locales] if locales else None
+
+
+def derive_language_config(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    The backend's shape, built from the same declaration the menu is built from.
+
+    Its date formats are the only thing here the browser tiers do not need, which is why
+    this was a second setting rather than a second reading of the first one.
+    """
+    locales = _locales(config)
+    if not locales:
+        return None
+    default = (config.get("i18n") or {}).get("defaultLocale")
+    if not default:
+        print("Error: i18n.defaultLocale is required when i18n.locales is set; the backend "
+              "refuses to start without a default locale.")
+        sys.exit(1)
+    return {
+        "default_locale": default,
+        "available_locales": [
+            {"locale": entry["locale"], "date_format": entry.get("dateFormat", "YYYY/MM/DD")}
+            for entry in locales
+        ],
+    }
+
+
 BACKEND_ENV_MAP: Dict[str, str] = {
     'GLOBAL_PRODUCT_NAME': 'branding.appName',
 
-    # i18n
-    "BACKEND_LANGUAGE_CONFIG": "i18n.conversation",
+    # i18n - derived, so the menu and the agent cannot be told different things
+    "BACKEND_LANGUAGE_CONFIG": Derived("i18n", derive_language_config),
 
 
     # Invitation Codes
@@ -70,9 +155,9 @@ FRONTEND_ENV_MAP: Dict[str, str] = {
     "GLOBAL_ENABLE_KNOWLEDGE_HUB": "knowledgeHub.enabled",
     "FRONTEND_KNOWLEDGE_HUB_SECTORS": "knowledgeHub.sectors",
 
-    # i18n
-    "FRONTEND_DEFAULT_LOCALE": "i18n.ui.defaultLocale",
-    "FRONTEND_SUPPORTED_LOCALES": "i18n.ui.supportedLocales",
+    # i18n - derived from the same declaration the backend's config is built from
+    "FRONTEND_DEFAULT_LOCALE": Derived("i18n", derive_default_locale),
+    "FRONTEND_SUPPORTED_LOCALES": Derived("i18n", derive_supported_locales),
 
     # Sensitive data Fields
     "FRONTEND_SENSITIVE_DATA_FIELDS": "sensitiveData.fields",
@@ -183,11 +268,15 @@ def build_env_updates(config: Dict[str, Any], mapping: Dict[str, str], namespace
     selected = set(namespaces) if namespaces else None
 
     updates: Dict[str, Any] = {}
-    for env_key, dotted_path in mapping.items():
-        top = dotted_path.split('.', 1)[0]
-        if selected is not None and top not in selected:
-            continue
-        value = get_by_dotted_path(config, dotted_path)
+    for env_key, source in mapping.items():
+        if isinstance(source, Derived):
+            if selected is not None and source.namespace not in selected:
+                continue
+            value = source.compute(config)
+        else:
+            if selected is not None and source.split('.', 1)[0] not in selected:
+                continue
+            value = get_by_dotted_path(config, source)
         if value is None:
             continue
         updates[env_key] = value
