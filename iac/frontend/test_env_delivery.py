@@ -46,6 +46,18 @@ UNDELIVERED_BY_DESIGN = {
 }
 
 
+#: Names the deployment works out for itself and an operator never supplies: stack outputs,
+#: the environment's own name, the credentials the auth stack produces. These are delivered
+#: and read, and their absence from the template is correct rather than an oversight.
+DERIVED_AT_DEPLOY_TIME = {
+    "BACKEND_URL": "an output of the backend stack",
+    "TARGET_ENVIRONMENT_NAME": "derived from the stack name",
+    "FIREBASE_API_KEY": "an output of the auth stack",
+    "FIREBASE_AUTH_DOMAIN": "an output of the auth stack",
+    "ADMIN_FRONTEND_FIREBASE_PROJECT_ID": "the environment's own project id",
+}
+
+
 def declared_variables(env_service_path: str) -> set:
     """
     The names the interface reads, from its `EnvVariables` enum.
@@ -145,6 +157,39 @@ def test_the_exception_lists_have_no_stale_entries():
                 stale.append(f"  {tier}: {name}")
     assert not stale, ("UNDELIVERED_BY_DESIGN lists variables that are no longer read, or "
                        "that are now delivered:\n" + "\n".join(stale))
+
+
+def test_every_setting_that_works_is_one_the_operator_can_discover():
+    """
+    The third direction, and the quietest: delivered, read, and in no template.
+
+    `env.template` is both the validator and the only list of what a deployment can be told.
+    A variable that works perfectly but appears in no template is a setting nobody will find
+    - `FRONTEND_FAQ_TUTORIAL_VIDEO_URL` was documented in the customisation guide, shipped in
+    the default configuration, mapped by the injector and delivered to the browser, while the
+    file an operator actually fills in never mentioned it.
+    """
+    template = template_variables()
+    failures = []
+    for tier, (env_service, prepare_script) in TIERS.items():
+        working = declared_variables(env_service) & delivered_variables(prepare_script)
+        undiscoverable = sorted(working - template - set(DERIVED_AT_DEPLOY_TIME))
+        if undiscoverable:
+            failures.append(f"  {tier}: {', '.join(undiscoverable)}")
+    assert not failures, (
+        "these reach the browser and no template tells an operator they exist:\n"
+        + "\n".join(failures)
+        + "\nAdd each to env.template, or record it in DERIVED_AT_DEPLOY_TIME if the "
+          "deployment works it out rather than being told it.")
+
+
+def test_nothing_derived_at_deploy_time_is_also_asked_of_the_operator():
+    """Asking for a value the deployment overwrites wastes the operator's time and confuses."""
+    template = template_variables()
+    asked = sorted(name for name in DERIVED_AT_DEPLOY_TIME if name in template)
+    assert not asked, (
+        "env.template asks for these and the deployment derives them anyway: "
+        + ", ".join(asked))
 
 
 def test_the_admin_panel_receives_the_logo_it_reads():

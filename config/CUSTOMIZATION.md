@@ -271,26 +271,70 @@ For the full schema and examples, see the
 
 `faq.tutorialVideoUrl` — URL of the tutorial video embedded in the FAQ page.
 
-## Applying Changes Locally
+## Writing your own configuration file
 
-1. Copy `config/default.json` and give it a name that reflects your deployment (for example `config/connect.json`).
-2. Update the values in your new file. Only the values you change need to be included — anything not specified falls back to the defaults in `default.json`.
-3. Navigate to the `config` directory and run the inject script:
+1. Create a file named for your deployment — `config/horizonte.json`, say. Do **not** copy
+   `default.json`; a copy is a fork, and it stops you inheriting anything the product improves.
+2. Put in it only what differs from the defaults. Your file is layered over `default.json`,
+   key by key:
+   - objects merge, so changing one theme colour is one line, not thirty;
+   - arrays and plain values replace, so `partnerLogos` is exactly the list you give;
+   - `null` removes something the defaults provide.
+3. Keep it with your deployment, not in this repository. A real deployment's configuration
+   committed here is how `njira.json` came to exist, and why it has been removed.
+
+```json
+{
+  "branding": {
+    "appName": "Horizonte",
+    "country": "Mozambique",
+    "theme": { "brand-primary": "27 79 114" },
+    "assets": { "logo": "/horizonte-logo.svg" },
+    "contactEmail": "ola@horizonte.example"
+  },
+  "i18n": { "ui": { "defaultLocale": "pt-MZ", "supportedLocales": ["pt-MZ", "en-US"] } }
+}
+```
+
+## Applying it to a deployment
+
+Merge it into the environment file the deployment pipeline uploads:
+
+```bash
+python3 config/inject-config.py \
+  --config /path/to/horizonte.json \
+  --deployment-env /path/to/config-dir/.env.<realm>.<env>
+```
+
+That file also holds your infrastructure — database URIs, project ids, OAuth credentials —
+which are **not** customisation and are not in your configuration file. The injector upserts:
+lines it does not own are left exactly as they are, comments and all. Run it as often as you
+like; it is the configuration that is authoritative, not the env file.
+
+Then upload and deploy as usual (`setup_env.py`, then `prepare.py`). Your branding change
+costs a redeploy, not a rebuild.
+
+Two things it refuses rather than letting them fail later:
+
+- **A variable the deployment does not know.** The pipeline validates against
+  `iac/templates/env.template` and reads what the template lists, so a mapping the template
+  does not carry would reach nothing at all. You are told which one, by name, here.
+- **A value an environment file cannot carry.** A line break has nowhere to go. Values
+  containing `#` or significant whitespace are quoted for you — without that,
+  `Ranked #1 by the Ministry` arrives in the browser as `Ranked`.
+
+## Applying it locally
+
+The same file drives a local development environment, writing the backend `.env` and the
+frontend's `public/data/env.js`:
 
 ```bash
 cd config
-python3 inject-config.py --config connect.json
+python3 inject-config.py --config horizonte.json
+python3 inject-config.py --config horizonte.json --namespaces branding auth
 ```
 
-This injects values into the backend `.env` file and the frontend `public/data/env.js` file.
-
-To apply only specific sections:
-
-```bash
-python3 inject-config.py --config connect.json --namespaces branding auth
-```
-
-4. Restart the frontend and backend to pick up the new values.
+Restart the frontend and backend to pick up the new values.
 
 ## Configuration Reference
 

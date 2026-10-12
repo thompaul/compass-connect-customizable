@@ -9,6 +9,12 @@ from typing import Dict, Any, Optional, Iterable, Tuple
 DEFAULT_BACKEND_ENV_PATH = '../backend/.env'
 DEFAULT_FRONTEND_ENV_PATH = '../frontend-new/public/data/env.js'
 
+#: The shipped defaults, which a deployment's own file is layered on top of.
+DEFAULT_DEFAULTS_PATH = Path(__file__).resolve().parent / 'default.json'
+
+#: Where the deployment pipeline reads the variables it validates and uploads.
+DEFAULT_ENV_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / 'iac' / 'templates' / 'env.template'
+
 BACKEND_ENV_MAP: Dict[str, str] = {
     'GLOBAL_PRODUCT_NAME': 'branding.appName',
 
@@ -79,6 +85,42 @@ FRONTEND_JSON_FIELDS = {
     'FRONTEND_PARTNER_LOGOS',
     # Add more JSON.stringify fields here
 }
+
+
+def deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Layer one configuration over another.
+
+    Dictionaries merge key by key so a deployment's file carries only what differs from the
+    shipped defaults - a theme with two colours changed is two colours, not thirty. Lists and
+    scalars replace wholesale, because a partial list is never what anybody means. An explicit
+    `null` deletes the key, which is the only way to say "not this one" about something the
+    defaults provide.
+    """
+    merged = dict(base)
+    for key, value in overlay.items():
+        if value is None:
+            merged.pop(key, None)
+        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_layered_config(defaults_path: Optional[Path], config_paths: Iterable[Path]) -> Dict[str, Any]:
+    """
+    The shipped defaults first, then each deployment file in the order given.
+
+    Keeping the two apart is the point: the defaults can be updated with the product without
+    overwriting anybody's choices, because nobody's choices are stored in them.
+    """
+    config: Dict[str, Any] = {}
+    if defaults_path is not None:
+        config = read_json(defaults_path)
+    for path in config_paths:
+        config = deep_merge(config, read_json(path))
+    return config
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -259,23 +301,139 @@ def update_frontend_env(config: Dict[str, Any], env_js_path: Path, namespaces: O
     env_js_path.write_text(content)
 
 
+#: Whitespace followed by `#` starts a comment in an env file, so a value carrying one is
+#: silently truncated at that point - "Ranked #1 in the country" becomes "Ranked". Leading and
+#: trailing whitespace is dropped for the same reason. Both are survivable by quoting.
+NEEDS_QUOTING = re.compile(r'\s#')
+
+
+def format_deployment_env_value(key: str, value: str) -> str:
+    """
+    Render a value so the env file gives it back unchanged.
+
+    Worth the care: these values are a partner's free text and their JSON, and the failure
+    mode is not an error but a quietly shorter string, three deployment steps downstream.
+    """
+    if '\n' in value or '\r' in value:
+        print(f"Error: {key} contains a line break, which an environment file cannot carry.")
+        sys.exit(1)
+
+    if NEEDS_QUOTING.search(value) or value != value.strip():
+        escaped = value.replace('\\', '\\\\').replace('"', '\\"')
+        return f'"{escaped}"'
+    return value
+
+
+def deployment_env_map() -> Dict[str, str]:
+    """
+    Both tiers' variables, because the deployment keeps them in one file.
+
+    `deploy_backend.py` reads the backend's from it and `prepare_frontend.py` reads the
+    frontend's; which tier a variable belongs to is their business, not this file's. The two
+    maps agree wherever they overlap, and this asserts it rather than letting one win quietly.
+    """
+    merged = dict(BACKEND_ENV_MAP)
+    for key, dotted_path in FRONTEND_ENV_MAP.items():
+        existing = merged.get(key)
+        if existing is not None and existing != dotted_path:
+            raise ValueError(
+                f"{key} is mapped to '{existing}' for the backend and '{dotted_path}' for the "
+                f"frontend. One variable cannot carry two different values into one env file.")
+        merged[key] = dotted_path
+    return merged
+
+
+def template_variables(template_path: Path) -> set:
+    """Every variable the deployment's validator knows about."""
+    names = set()
+    for line in template_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        names.add(line.split('=', 1)[0].strip())
+    return names
+
+
+def update_deployment_env(config: Dict[str, Any], env_path: Path, template_path: Optional[Path],
+                          namespaces: Optional[Iterable[str]] = None):
+    """
+    Merge the configuration into the environment file the deployment pipeline consumes.
+
+    This file also carries the infrastructure a deployment needs - database URIs, project ids,
+    OAuth credentials - which are not customisation and are not in the configuration file. So
+    this upserts rather than rewrites: lines it does not own are left exactly as they are.
+
+    Unlike the local development writers, an empty value is written rather than skipped. The
+    configuration file is meant to be this deployment's declared state, and skipping an empty
+    would leave a previous value in place while the file said otherwise.
+    """
+    if not env_path.exists():
+        print(f"Error: Deployment environment file not found at '{env_path}'")
+        print("       Start from iac/templates/env.template and fill in the infrastructure "
+              "values first; this merges your configuration into it.")
+        sys.exit(1)
+
+    updates_raw = build_env_updates(config, deployment_env_map(), namespaces)
+    if not updates_raw:
+        return
+
+    if template_path is not None and template_path.exists():
+        known = template_variables(template_path)
+        unknown = sorted(key for key in updates_raw if key not in known)
+        if unknown:
+            print(f"Error: these would be written to '{env_path.name}' and the deployment "
+                  f"does not know them: {', '.join(unknown)}")
+            print("       A variable the template does not list reaches nothing. Add it to "
+                  "iac/templates/env.template and to the tier that reads it.")
+            sys.exit(1)
+
+    lines = env_path.read_text().splitlines(keepends=True)
+    for key, raw_value in updates_raw.items():
+        lines = upsert_env_lines(lines, key, format_deployment_env_value(key, coerce_env_value(raw_value) or ''))
+
+    env_path.write_text(''.join(lines))
+    print(f"Wrote {len(updates_raw)} configuration values into {env_path}")
+
+
 def parse_args(argv: Optional[list[str]] = None):
     parser = argparse.ArgumentParser(
-        description='Inject namespaced config into backend .env and frontend env.js',
+        description='Turn a configuration file into the environment variables that carry it',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  python3 inject-config.py --config default.json
-  python3 inject-config.py --config default.json --namespaces branding auth
-  python3 inject-config.py --config default.json --backend-env backend/.env --frontend-env frontend-new/public/data/env.js
+Two destinations.
+
+  A deployment - merges into the file setup_env.py uploads, leaving the infrastructure
+  values in it untouched:
+
+    python3 inject-config.py --config my-deployment.json \
+        --deployment-env /path/to/config-dir/.env.myrealm.prod
+
+  Local development - the backend .env and the frontend's runtime env.js:
+
+    python3 inject-config.py --config my-deployment.json
+    python3 inject-config.py --config my-deployment.json --namespaces branding auth
+
+Your file is layered over the shipped defaults, so it needs to carry only what differs.
+Pass --no-defaults to use it alone, or --config more than once to layer several.
         """
     )
 
-    parser.add_argument('--config', required=True, metavar='CONFIG_FILE', help='Path to config JSON (e.g., default.json)')
+    parser.add_argument('--config', required=True, action='append', metavar='CONFIG_FILE',
+                        help='Your configuration JSON. Repeat to layer several, last wins.')
+    parser.add_argument('--defaults', default=str(DEFAULT_DEFAULTS_PATH), metavar='CONFIG_FILE',
+                        help='The shipped defaults your file is layered over (default: config/default.json)')
+    parser.add_argument('--no-defaults', dest='defaults', action='store_const', const=None,
+                        help='Use the given file or files alone, with nothing underneath them')
+    parser.add_argument('--deployment-env', default=None, metavar='ENV_FILE',
+                        help='Merge into a deployment environment file (.env.<realm>.<env>) '
+                             'instead of writing the local development files')
+    parser.add_argument('--env-template', default=str(DEFAULT_ENV_TEMPLATE_PATH), metavar='TEMPLATE',
+                        help='The template to check written variable names against '
+                             '(default: iac/templates/env.template)')
     parser.add_argument('--backend-env', default=DEFAULT_BACKEND_ENV_PATH, help='Path to backend .env')
     parser.add_argument('--frontend-env', default=DEFAULT_FRONTEND_ENV_PATH, help='Path to frontend env.js')
     parser.add_argument('--namespaces', nargs='*', default=None,
-                        help='Only apply these top-level namespaces (e.g., branding, cvUpload). Omit to apply all mapped keys.')
+                        help='Only apply these top-level namespaces (e.g., branding, auth). Omit to apply all mapped keys.')
 
     return parser.parse_args(argv)
 
@@ -283,11 +441,21 @@ Examples:
 def main():
     args = parse_args()
 
-    config_path = Path(args.config)
-    config = read_json(config_path)
+    config = load_layered_config(
+        Path(args.defaults) if args.defaults else None,
+        [Path(path) for path in args.config],
+    )
 
-    update_backend_env(config, Path(args.backend_env), args.namespaces)
-    update_frontend_env(config, Path(args.frontend_env), args.namespaces)
+    if args.deployment_env:
+        update_deployment_env(
+            config,
+            Path(args.deployment_env),
+            Path(args.env_template) if args.env_template else None,
+            args.namespaces,
+        )
+    else:
+        update_backend_env(config, Path(args.backend_env), args.namespaces)
+        update_frontend_env(config, Path(args.frontend_env), args.namespaces)
 
     print('Configuration injected successfully')
 
