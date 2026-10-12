@@ -40,14 +40,18 @@ def main():
     gcp_oauth_client_id = getenv("GCP_OAUTH_CLIENT_ID")
     gcp_oauth_client_secret = getenv("GCP_OAUTH_CLIENT_SECRET", secret=True)
 
-    # Optional extra authorized domains for Firebase Auth (e.g. custom domain aliases).
-    # e.g. FRONTEND_CUSTOM_DOMAINS='["njila.ai"]' ADMIN_FRONTEND_CUSTOM_DOMAINS='["admin.njila.ai"]'
+    # Vanity domains this deployment is reached at, beyond the generated one.
+    # e.g. FRONTEND_CUSTOM_DOMAINS='["example.org"]' ADMIN_FRONTEND_CUSTOM_DOMAINS='["admin.example.org"]'
     _extra_frontend = os.getenv("FRONTEND_CUSTOM_DOMAINS")
     _extra_admin = os.getenv("ADMIN_FRONTEND_CUSTOM_DOMAINS")
+    frontend_custom_domains = json.loads(_extra_frontend) if _extra_frontend else []
     extra_authorized_domains = (
-        (json.loads(_extra_frontend) if _extra_frontend else []) +
+        frontend_custom_domains +
         (json.loads(_extra_admin) if _extra_admin else [])
     )
+    # The first is canonical: it is the one Firebase puts in its sign-in emails and in the
+    # link that completes a password reset, so it has to be the address the user typed.
+    custom_domain = frontend_custom_domains[0] if frontend_custom_domains else None
 
     # Deploy the auth
     deploy_auth(
@@ -62,6 +66,7 @@ def main():
         gcp_oauth_client_id=gcp_oauth_client_id,
         gcp_oauth_client_secret=gcp_oauth_client_secret,
         app_name=app_name,
+        custom_domain=custom_domain,
     )
 
 

@@ -18,13 +18,13 @@ class TestSanitizeEnvironmentName:
     def test_lowercases_and_replaces_unsupported_characters(self):
         """Lowercases and replaces unsupported characters."""
         # GIVEN an environment name with characters Langfuse does not accept
-        given_name = "Dev Njila/Zambia"
+        given_name = "Dev Example/Kenya"
 
         # WHEN the name is sanitized
         actual_name = sanitize_environment_name(given_name)
 
         # THEN expect a lowercase, hyphen-separated name
-        assert actual_name == "dev-njila-zambia"
+        assert actual_name == "dev-example-kenya"
 
     def test_escapes_the_reserved_langfuse_prefix(self):
         """Escapes the reserved langfuse prefix."""
@@ -135,7 +135,7 @@ class TestParseTracingConfig:
     def test_sanitizes_the_environment_name(self):
         """Sanitizes the environment name."""
         # GIVEN a target environment name that Langfuse would reject
-        given_environment = "Dev Njila"
+        given_environment = "Dev Example"
 
         # WHEN the configuration is parsed
         actual_config = parse_tracing_config(
@@ -143,4 +143,4 @@ class TestParseTracingConfig:
         )
 
         # THEN expect a sanitized environment
-        assert actual_config.environment == "dev-njila"
+        assert actual_config.environment == "dev-example"

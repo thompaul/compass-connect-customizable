@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pulumi
 import pulumi_gcp as gcp
 from environment.env_types import EnvironmentTypes
@@ -152,22 +154,29 @@ def _setup_email_templates_dns(basic_config: ProjectBaseConfig,
         ),
     ]
 
-APPS_WITH_CUSTOM_DOMAINS = [
-    "njila.ai",
-    "njiramoz.ai"
-]
-
-
 class App:
-    def __init__(self, *, app_name: str, frontend_domain: pulumi.Output[str]):
-        self._app_name = app_name
+    """
+    Where this deployment's users actually arrive.
+
+    Firebase puts this domain in the sign-in emails it sends and in the link that completes a
+    password reset or an email verification, so it has to be the address the user typed — not
+    the generated one — whenever a deployment fronts itself with a domain of its own.
+
+    Which deployments those are used to be a literal list of two named partners' domains, which
+    meant a third partner's custom domain silently did nothing. It is now whatever the
+    deployment declares in ``FRONTEND_CUSTOM_DOMAINS``; declaring none keeps the generated
+    frontend domain, which is what every deployment without a vanity domain wants.
+    """
+
+    def __init__(self, *, custom_domain: Optional[str], frontend_domain: pulumi.Output[str]):
+        self._custom_domain = custom_domain
         self._frontend_domain = frontend_domain
 
     def has_custom_domain(self):
-        return self._app_name.lower() in APPS_WITH_CUSTOM_DOMAINS
+        return bool(self._custom_domain)
 
     def get_custom_domain_name(self):
-        return self._app_name.lower()
+        return self._custom_domain
 
     def get_firebase_custom_domain(self):
         if self.has_custom_domain():
@@ -190,6 +199,7 @@ def _setup_identity_platform(
         frontend_domain: pulumi.Output[str],
         extra_authorized_domains: list[str],
         app_name: str,
+        custom_domain: Optional[str],
         dependencies: list[pulumi.Resource]) -> IdentityPlatform:
     # for the development environment allow localhost
     def _get_authorized_domains(args) -> list[str]:
@@ -203,7 +213,7 @@ def _setup_identity_platform(
         return _authorized_domains
 
     authorized_domains = pulumi.Output.all(frontend_domain, environment_type).apply(_get_authorized_domains)
-    domain_name = App(app_name=app_name, frontend_domain=frontend_domain)
+    domain_name = App(custom_domain=custom_domain, frontend_domain=frontend_domain)
     firebase_custom_domain = domain_name.get_firebase_custom_domain()
     callback_uri = domain_name.get_firebase_callback_uri()
     idp_config = IdentityPlatform(
@@ -273,7 +283,8 @@ def deploy_auth(*,
                 extra_authorized_domains: list[str],
                 gcp_oauth_client_id: str,
                 gcp_oauth_client_secret: str,
-                app_name: str):
+                app_name: str,
+                custom_domain: Optional[str] = None):
     """
     Deploy the Identity Platform for the project.
 
@@ -287,6 +298,10 @@ def deploy_auth(*,
     :param app_name: The public-facing name shown in Firebase auth emails (%APP_NAME%) and
                      on the Google sign-in consent screen.  Reads from the ``auth:app_name``
                      Pulumi config key.
+    :param custom_domain: The vanity domain this deployment is reached at, if it has one; the
+                     first entry of ``FRONTEND_CUSTOM_DOMAINS``.  Firebase addresses its
+                     sign-in emails and its email-action handler there instead of at the
+                     generated frontend domain.
     """
     # Refuse to start unless the domain is delegated. Everything below depends on Firebase
     # being able to read this zone over public DNS, and an undelegated zone fails that in a
@@ -314,6 +329,7 @@ def deploy_auth(*,
         frontend_domain=frontend_domain,
         extra_authorized_domains=extra_authorized_domains,
         app_name=app_name,
+        custom_domain=custom_domain,
         dependencies=record_sets
     )
     _setup_google_signin(

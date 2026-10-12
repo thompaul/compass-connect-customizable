@@ -13,7 +13,7 @@ Usage:
     python create_admin_user.py --name "John Doe" --email "john@example.com" --role admin --tenant-id "tenant-abc123"
 
     # Specify project (required when tenant is in a different project than gcloud default)
-    python create_admin_user.py --name "John Doe" --email "john@example.com" --role admin --tenant-id "tenant-abc123" --project-id "compass-dev-njila-awud7b7tl6gw"
+    python create_admin_user.py --name "John Doe" --email "john@example.com" --role admin --tenant-id "tenant-abc123" --project-id "compass-dev-example-a1b2c3d4e5"
 """
 
 import argparse
@@ -224,7 +224,7 @@ def parse_args() -> Arguments:
         "--continue-url",
         required=False,
         type=str,
-        help="URL to redirect to after password reset (e.g. https://admin.njila.ai)"
+        help="URL to redirect to after password reset (e.g. https://admin.example.org)"
     )
 
     parser.add_argument(

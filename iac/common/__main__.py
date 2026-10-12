@@ -34,7 +34,7 @@ def main():
     admin_frontend_url = getstackref(env_reference, "admin_frontend_url")
 
     # Optional extra custom domain aliases for the frontend and admin frontend (JSON arrays).
-    # e.g. FRONTEND_CUSTOM_DOMAINS='["njila.ai"]'
+    # e.g. FRONTEND_CUSTOM_DOMAINS='["example.org"]'
     _extra_frontend = os.getenv("FRONTEND_CUSTOM_DOMAINS")
     _extra_admin = os.getenv("ADMIN_FRONTEND_CUSTOM_DOMAINS")
     frontend_domains = [frontend_domain] + (json.loads(_extra_frontend) if _extra_frontend else [])

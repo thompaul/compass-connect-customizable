@@ -24,7 +24,7 @@ institution-sector dropdown value to job-posting `category` values via a
 
 ## Regenerate
 ```bash
-cd backend   # JOBS_* env + Vertex creds; GOOGLE_CLOUD_PROJECT - njila project
+cd backend   # JOBS_* env + Vertex creds; GOOGLE_CLOUD_PROJECT - the deployment's project
 poetry run python -m app.analytics.job_demand.generate_sector_category_map
 ```
 One Gemini call; rerun when the `category` distribution changes. The consumer

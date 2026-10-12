@@ -184,7 +184,7 @@ class FirebaseService:
         :param tenant_id: The Firebase tenant ID.
         :param email: The user's email address.
         :param continue_url: The URL of the admin frontend's auth-handler page
-            (e.g. https://admin.njila.ai/#/auth-handler). For generate_password_reset_link,
+            (e.g. https://admin.example.org/#/auth-handler). For generate_password_reset_link,
             this is the action handler URL — the link itself points here with mode=,
             oobCode=, apiKey=, tenantId= appended as query params. The domain must be
             listed in the Firebase project's authorized domains.

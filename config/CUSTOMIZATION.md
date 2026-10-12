@@ -16,10 +16,21 @@ The configuration is organized into the following sections:
 
 Only options exposed in these sections are customizable. Core application logic, workflows, and page layouts are fixed.
 
+## What you inherit if you set nothing
+
+Every value below is optional, and nothing you leave unset belongs to another organisation.
+A deployment that configures nothing calls itself Compass Connect, shows the product's own
+marks, credits no funders, offers no contact address, reports to no analytics property, and
+says plainly on its legal pages that it has not published any. That is deliberate: the
+alternative is a deployment that looks finished while presenting itself as somebody else.
+
+The one consequence worth knowing before you deploy: **your privacy policy and terms of use
+are yours to write.** Until you supply them, both pages tell your users so.
+
 ## App Name & Tab Title
 
 - `branding.appName` — name displayed throughout the application
-- `branding.country` — country name shown in dashboard (e.g. "opportunities in Zambia"); defaults to "your country" when unset
+- `branding.country` — country name shown in dashboard (e.g. "opportunities in Kenya"); defaults to "your country" when unset
 - `branding.browserTabTitle` — text shown in the browser tab
 
 ## SEO Metadata
@@ -41,8 +52,20 @@ or use a full URL to an externally hosted asset.
 - `branding.assets.appIcon` — app icon (mobile / PWA)
 - `branding.assets.chatAvatar` — AI assistant avatar shown in the chat interface
 
-`branding.partnerLogos` is a list of partner logos shown in the footer.
-Each entry takes `src`, `alt`, and optional `width` / `height`.
+Unset, each of these falls back to the Compass Connect mark of the same kind, which ships in
+the bundle. Nothing falls back to a partner's logo.
+
+## Footer
+
+- `branding.partnerLogos` — the funders and partners credited in the footer, as a list of
+  entries taking `src`, `alt`, and optional `width` / `height`. Unset, the footer credits
+  nobody: a deployment shows the organisations it names and no others.
+- `branding.contactEmail` — the address behind the footer's "Contact" link. Unset, the link
+  is not shown, rather than pointing your users at somebody else's inbox.
+- `branding.footerAttribution` — one line naming whoever runs and funds this deployment, for
+  example "Offered by the Ministry of Labour in partnership with …". Unset, the footer
+  credits Compass Connect. This line is plain text and is not translated; if you serve
+  several languages and need it translated, leave it unset for now.
 
 ## Illustrations
 
@@ -182,16 +205,26 @@ The Job Matching pipeline scrapes, classifies, and surfaces jobs to users:
 
 ## Legal Documents
 
-Legal documents are matched to the deployment automatically using `branding.appName` (case-insensitive).
+**A deployment that has not published legal documents says so.** Both pages render an explicit
+notice telling the reader that the organisation running this deployment has not published a
+privacy policy or terms of use, and to contact that organisation before providing personal
+information. Nothing falls back to another party's documents: a privacy policy names the
+organisation accountable for a user's data, and showing one belonging to a party that never
+receives that data is a misstatement rather than a placeholder.
 
-To add documents for a new deployment:
+Supplying your own currently requires a frontend build, because the documents are compiled
+into the bundle:
 
-1. Add two Markdown files to `frontend-new/src/legal/documents/`:
-   - `privacy-policy-{product-slug}.md`
-   - `terms-of-use-{product-slug}.md`
-2. Register them in `frontend-new/src/legal/legalDocumentLoader.ts` under `documentsByProductName`.
+1. Add two Markdown files to `frontend-new/src/legal/documents/`, each with a `title` in its
+   YAML frontmatter. `{{appName}}` in the body is replaced with `branding.appName`.
+2. Register them in `frontend-new/src/legal/legalDocumentLoader.ts` under
+   `documentsByProductName`, keyed by your `branding.appName` in lower case.
 
-If no match is found the app falls back to the default documents.
+That is a build-time step in the product repository, which is the opposite of how everything
+else on this page works. Loading these at runtime from your own deployment's assets — so a
+partner supplies them the same way they supply a logo — is the change that retires the
+registry, and the two entries in it today are the deployments that predate configurable legal
+content.
 
 ## Features
 
@@ -203,7 +236,7 @@ When disabled, all CV-related UI elements are hidden and CV APIs are not registe
 
 ### Skills Report
 
-- `skillsReport.logos` — one or more logos displayed in generated reports (supports separate sizing for DOCX and PDF)
+- `skillsReport.logos` — one or more logos displayed in generated reports (supports separate sizing for DOCX and PDF). Unset, the report carries your deployment's own logo and nothing else
 - `skillsReport.downloadFormats` — available download formats: `pdf`, `docx`, or both
 - `skillsReport.report.summary.show` — show or hide the summary section
 - `skillsReport.report.experienceDetails.title` — show or hide the experience title
@@ -214,6 +247,10 @@ When disabled, all CV-related UI elements are hidden and CV APIs are not registe
 ## Analytics
 
 Compass Connect supports Google Analytics 4 (GA4) via Google Tag Manager (GTM).
+
+Tracking is **off by default and no identifiers are shipped**. Supply your own before
+enabling it — an inherited container id sends your users' behaviour to whoever owns that
+property, and nothing in the interface would show it.
 
 - `analytics.enabled` — enable or disable tracking in the frontend
 - `analytics.gtmContainerId` — GTM container ID (for example `GTM-XXXXXXX`)

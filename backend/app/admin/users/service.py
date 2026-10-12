@@ -275,7 +275,7 @@ class UsersService:
         :param user_id: The user ID whose reset link to generate.
         :param continue_url: The admin frontend URL to embed so the link lands on the
             correct auth-handler page (tenant-aware). Should be the admin frontend's
-            auth-handler URL (e.g. https://admin.njila.ai/#/auth-handler).
+            auth-handler URL (e.g. https://admin.example.org/#/auth-handler).
         :return: PasswordResetLinkResponse containing the reset link.
         """
         logger.info("Generating password reset link for user: %s, tenant: %s", user_id, tenant_id)

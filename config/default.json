@@ -1,26 +1,23 @@
 {
   "branding": {
-    "appName": "Njila",
-    "country": "Zambia",
-    "browserTabTitle": "Njila",
-    "metaDescription": "Welcome to Njila! An AI-powered career assistant that helps jobseekers identify and showcase their skills. Join now to create a digital profile and connect with new opportunities.",
+    "appName": "Compass Connect",
+    "country": "",
+    "browserTabTitle": "Compass Connect",
+    "metaDescription": "An AI-powered career assistant that helps jobseekers identify and showcase their skills. Create a digital profile and connect with new opportunities.",
     "seo": {
-      "name": "Njila",
-      "url": "https://njila.ai",
-      "image": "https://www.example.org/assets/logo.svg",
-      "description": "Njila is an AI-powered conversational tool that helps jobseekers discover and articulate their skills. Through natural dialogue, Njila guides users to identify abilities gained through all types of work-formal, informal, and unpaid. It creates standardized digital profiles that can connect to opportunities."
+      "name": "Compass Connect",
+      "url": "",
+      "image": "/compass-connect-logo-dark.svg",
+      "description": "Compass Connect is an AI-powered conversational tool that helps jobseekers discover and articulate their skills. Through natural dialogue it guides users to identify abilities gained through all types of work - formal, informal and unpaid - and creates standardised digital profiles that can connect to opportunities."
     },
     "assets": {
-      "logo": "/logo.svg",
-      "darkLogo": "/logo-dark.svg",
-      "favicon": "/favicon.svg",
-      "appIcon": "/njila-logo.svg",
-      "chatAvatar": "/chat-avatar.svg"
+      "logo": "/compass-connect-logo-light.svg",
+      "darkLogo": "/compass-connect-logo-dark.svg",
+      "favicon": "/compass-connect-favicon.svg",
+      "appIcon": "/compass-connect-favicon.svg",
+      "chatAvatar": "/compass-connect-chat-avatar.svg"
     },
-    "partnerLogos": [
-      { "src": "/tabiya-logo.svg", "alt": "Tabiya", "height": 46 },
-      { "src": "/world-bank-logo.svg", "alt": "World Bank Group", "height": 28 }
-    ],
+    "partnerLogos": [],
     "illustrations": {
       "loginHero": "/climber.svg",
       "loginFeature1": "/conversation.svg",
@@ -72,7 +69,9 @@
       "text-accent": "38 94 167",
       "font-heading": "\"Bricolage Grotesque\", sans-serif",
       "font-body": "\"Plus Jakarta Sans\", sans-serif"
-    }
+    },
+    "contactEmail": "",
+    "footerAttribution": ""
   },
   "auth": {
     "disableLoginCode": true,
@@ -84,28 +83,7 @@
     "enabled": true
   },
   "skillsReport": {
-    "logos": [
-      {
-        "url": "/logo.png",
-        "docxStyles": {
-          "width": 250,
-          "height": 62
-        },
-        "pdfStyles": {
-          "height": 46
-        }
-      },
-      {
-        "url": "/oxford-logo.png",
-        "docxStyles": {
-          "width": 200,
-          "height": 58
-        },
-        "pdfStyles": {
-          "height": 42
-        }
-      }
-    ],
+    "logos": [],
     "downloadFormats": [
       "DOCX",
       "PDF"
@@ -144,16 +122,16 @@
     }
   },
   "faq": {
-    "tutorialVideoUrl": "https://player.vimeo.com/video/1193881841?h=8ee6f6190d&title=0&byline=0&portrait=0"
+    "tutorialVideoUrl": ""
   },
   "analytics": {
-    "ga4AccountId": "387253059",
-    "ga4PropertyId": "528078871",
-    "ga4MeasurementId": "G-722MET383C",
-    "gtmAccountId": "6343687890",
-    "gtmContainerId": "GTM-K3QPRR2W",
-    "gtmContainerNumericId": "246009778",
-    "enabled": true
+    "ga4AccountId": "",
+    "ga4PropertyId": "",
+    "ga4MeasurementId": "",
+    "gtmAccountId": "",
+    "gtmContainerId": "",
+    "gtmContainerNumericId": "",
+    "enabled": false
   },
   "sensitiveData": {
     "fields": {

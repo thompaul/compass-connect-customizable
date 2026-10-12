@@ -108,7 +108,8 @@ def _construct_environment_info(*,
 
 def _prepare_and_download_cfgs(*,
                                realm_name: str,
-                               output_dir: str):
+                               output_dir: str,
+                               only_environments: list[str] | None = None):
     print(f"info: preparing deployment infos of the realm: {realm_name}")
 
     # 1. Get all environments in the realm.
@@ -119,7 +120,7 @@ def _prepare_and_download_cfgs(*,
     summaries: list[dict[str, Any]] = []
     for environment in environments:
         try:
-            if environment.environment_name not in ["njila", "dev-njila"]:
+            if only_environments and environment.environment_name not in only_environments:
                 continue
 
             environment_output_dir = os.path.join(output_dir, environment.environment_name)
@@ -173,6 +174,14 @@ if __name__ == "__main__":
 
     parser.add_argument("--realm-name", type=str, required=True, help="The realm name to get the configurations for.")
     parser.add_argument(
+        "--environment",
+        type=str,
+        action="append",
+        dest="environments",
+        help="Limit the report to this environment; repeat for several. Default: every "
+             "environment in the realm. This used to be a hardcoded pair of one partner's "
+             "environment names, so the script reported on nothing in any other realm.")
+    parser.add_argument(
         "--output-dir",
         type=str,
         required=True,
@@ -187,7 +196,8 @@ if __name__ == "__main__":
 
         _prepare_and_download_cfgs(
             output_dir=args.output_dir,
-            realm_name=args.realm_name)
+            realm_name=args.realm_name,
+            only_environments=args.environments)
 
     except Exception as e:
         print(f"error: {e}")

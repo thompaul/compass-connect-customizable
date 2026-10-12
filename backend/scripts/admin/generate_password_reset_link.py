@@ -2,7 +2,7 @@
 Script to generate a password reset link for an existing admin user.
 
 Usage:
-    python generate_password_reset_link.py --email "john@example.com" --tenant-id "tenant-abc123" --project-id "compass-dev-njila-awud7b7tl6gw" --continue-url "https://admin.njila.ai"
+    python generate_password_reset_link.py --email "john@example.com" --tenant-id "tenant-abc123" --project-id "compass-dev-example-a1b2c3d4e5" --continue-url "https://admin.example.org"
 """
 
 import argparse
@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--email", required=True, type=str, help="The email address of the user")
     parser.add_argument("--tenant-id", required=True, type=str, help="The Firebase tenant ID")
     parser.add_argument("--project-id", required=True, type=str, help="The GCP project ID")
-    parser.add_argument("--continue-url", required=False, type=str, help="URL to redirect to after password reset (e.g. https://admin.njila.ai)")
+    parser.add_argument("--continue-url", required=False, type=str, help="URL to redirect to after password reset (e.g. https://admin.example.org)")
     return parser.parse_args()
 
 
