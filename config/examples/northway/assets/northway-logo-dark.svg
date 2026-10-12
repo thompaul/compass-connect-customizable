@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 48" width="300" height="48" aria-label="Northway">
+  <text
+    x="0" y="38"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="30"
+    font-weight="700"
+    letter-spacing="-0.9"
+    fill="#0C3B45"
+  >Northway<tspan fill="#38E0C5" letter-spacing="0">.</tspan></text>
+</svg>

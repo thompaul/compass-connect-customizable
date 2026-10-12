@@ -1,0 +1,55 @@
+{
+  "branding": {
+    "appName": "Southline",
+    "country": "Sur",
+    "browserTabTitle": "Southline",
+    "metaDescription": "Southline acompaña a las personas de Sur a reconocer sus habilidades y encontrar trabajo.",
+    "seo": {
+      "name": "Southline",
+      "url": "",
+      "image": "/southline-logo-dark.svg",
+      "description": "Southline es un asistente de orientación laboral para Sur."
+    },
+    "assets": {
+      "logo": "/southline-logo-light.svg",
+      "darkLogo": "/southline-logo-dark.svg",
+      "favicon": "/southline-favicon.svg",
+      "appIcon": "/southline-favicon.svg",
+      "chatAvatar": "/southline-chat-avatar.svg"
+    },
+    "partnerLogos": [],
+    "contactEmail": "",
+    "footerAttribution": "",
+    "theme": {
+      "brand-primary": "242 163 60",
+      "brand-primary-light": "247 199 136",
+      "brand-primary-dark": "199 123 24",
+      "brand-primary-contrast-text": "91 26 26",
+      "brand-secondary": "91 26 26",
+      "brand-secondary-light": "133 67 67",
+      "brand-secondary-dark": "58 14 14",
+      "brand-secondary-contrast-text": "255 255 255",
+      "nav-main-background": "91 26 26",
+      "nav-main-text": "255 255 255",
+      "page-background": "253 248 240",
+      "text-primary": "58 14 14"
+    }
+  },
+  "i18n": {
+    "defaultLocale": "es-ES",
+    "locales": [
+      {
+        "locale": "es-ES",
+        "dateFormat": "DD/MM/YYYY"
+      },
+      {
+        "locale": "en-GB",
+        "dateFormat": "DD/MM/YYYY"
+      }
+    ]
+  },
+  "knowledgeHub": {
+    "enabled": false,
+    "sectors": []
+  }
+}

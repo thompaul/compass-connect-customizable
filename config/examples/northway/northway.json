@@ -1,0 +1,63 @@
+{
+  "branding": {
+    "appName": "Northway",
+    "country": "Northland",
+    "browserTabTitle": "Northway — find your next step",
+    "metaDescription": "Northway helps people in Northland name the skills they already have and find work that uses them.",
+    "seo": {
+      "name": "Northway",
+      "url": "",
+      "image": "/northway-logo-dark.svg",
+      "description": "Northway is a careers assistant for Northland, run by the Northland Skills Fund."
+    },
+    "assets": {
+      "logo": "/northway-logo-light.svg",
+      "darkLogo": "/northway-logo-dark.svg",
+      "favicon": "/northway-favicon.svg",
+      "appIcon": "/northway-favicon.svg",
+      "chatAvatar": "/northway-chat-avatar.svg"
+    },
+    "partnerLogos": [
+      {
+        "src": "/northway-funder.svg",
+        "alt": "Northland Skills Fund"
+      }
+    ],
+    "contactEmail": "hello@northway.example",
+    "footerAttribution": "Offered by the Northland Skills Fund.",
+    "theme": {
+      "brand-primary": "56 224 197",
+      "brand-primary-light": "128 237 220",
+      "brand-primary-dark": "22 163 142",
+      "brand-primary-contrast-text": "12 59 69",
+      "brand-secondary": "12 59 69",
+      "brand-secondary-light": "58 103 113",
+      "brand-secondary-dark": "6 36 43",
+      "brand-secondary-contrast-text": "255 255 255",
+      "nav-main-background": "12 59 69",
+      "nav-main-text": "255 255 255",
+      "page-background": "244 250 249",
+      "text-primary": "12 59 69"
+    }
+  },
+  "i18n": {
+    "defaultLocale": "en-GB",
+    "locales": [
+      {
+        "locale": "en-GB",
+        "dateFormat": "DD/MM/YYYY"
+      },
+      {
+        "locale": "sw-KE",
+        "dateFormat": "DD/MM/YYYY"
+      }
+    ]
+  },
+  "knowledgeHub": {
+    "enabled": false,
+    "sectors": []
+  },
+  "faq": {
+    "tutorialVideoUrl": ""
+  }
+}
