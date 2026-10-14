@@ -5,7 +5,8 @@ from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from common_libs.database.get_mongo_db_connection import get_mongo_db_connection
-from common_libs.database.utils import get_database_connection_info, require_healthy_database
+from common_libs.database.utils import database_startup_budget_seconds, \
+    get_database_connection_info, require_healthy_database
 from features.skills_ranking.config import get_skills_ranking_config
 
 _registration_data_db_singleton: AsyncIOMotorDatabase | None = None
@@ -33,7 +34,8 @@ async def get_registration_data_db(
                 database = get_mongo_db_connection(mongo_db_uri, database_name)
 
                 await require_healthy_database(database, label="Registration Data",
-                                               mongodb_uri=mongo_db_uri, logger=_logger)
+                                               mongodb_uri=mongo_db_uri, logger=_logger,
+                                               budget_seconds=database_startup_budget_seconds())
 
                 _logger.info("Connected to Registration Data database: %s",
                              await get_database_connection_info(database))

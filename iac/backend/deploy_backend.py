@@ -311,6 +311,36 @@ def _setup_nat_gateway(*,
     return network, sub_net, [router_nat]
 
 
+# How long a starting container has to reach its databases, and how long the platform gives
+# the container. Two numbers that have to be chosen together, so they are written together.
+#
+# Neither was chosen before. Cloud Run's default startup probe is a single TCP check with a
+# failure threshold of one, so the container had 240 seconds to open its port; PyMongo's
+# default server-selection timeout is 30 seconds, so the application gave up after 30 and
+# exited, and the instance was destroyed with 210 seconds of its allowance unspent. The user
+# waited through a destroyed instance and the platform's own backoff - just under two minutes,
+# measured - for a database that answers in a quarter of a second when it answers at all.
+#
+# So the application's budget is deliberately smaller than the probe's. Whatever goes wrong,
+# the application reaches its own limit first and says which database and why, instead of the
+# platform killing it mid-sentence and reporting only that a probe failed.
+DATABASE_STARTUP_BUDGET_SECONDS = 150
+STARTUP_PROBE_PERIOD_SECONDS = 10
+STARTUP_PROBE_TIMEOUT_SECONDS = 5
+STARTUP_PROBE_FAILURE_THRESHOLD = 24
+
+# What `backend/Dockerfile` tells uvicorn to bind. Named here because a probe aimed at a port
+# nothing is listening on fails every time, for 240 seconds, and then reports only a timeout.
+CONTAINER_PORT = 8080
+
+# Container boot and Python import take about 7 seconds of the budget before the first ping.
+_STARTUP_PROBE_BUDGET_SECONDS = STARTUP_PROBE_PERIOD_SECONDS * STARTUP_PROBE_FAILURE_THRESHOLD
+assert _STARTUP_PROBE_BUDGET_SECONDS > DATABASE_STARTUP_BUDGET_SECONDS + 60, (
+    f"the startup probe allows {_STARTUP_PROBE_BUDGET_SECONDS}s and the application spends up "
+    f"to {DATABASE_STARTUP_BUDGET_SECONDS}s of it reaching its databases, which leaves no room "
+    f"for the container to boot - so the platform would kill it before it could say why")
+
+
 # Deploy cloud run service
 # See https://cloud.google.com/run/docs/overview/what-is-cloud-run for more information
 def _deploy_cloud_run_service(
@@ -388,6 +418,19 @@ def _deploy_cloud_run_service(
                         },
                     ),
                     image=fully_qualified_image_name,
+                    # Declared rather than inherited. The default is one TCP check with a
+                    # failure threshold of one: the first miss destroys the instance, and a
+                    # container that opens its port and then dies is indistinguishable from
+                    # one that never started. Asking repeatedly lets a container that is
+                    # waiting on a dependency go on waiting, in the instance it already has.
+                    startup_probe=gcp.cloudrunv2.ServiceTemplateContainerStartupProbeArgs(
+                        tcp_socket=gcp.cloudrunv2.ServiceTemplateContainerStartupProbeTcpSocketArgs(
+                            port=CONTAINER_PORT,
+                        ),
+                        period_seconds=STARTUP_PROBE_PERIOD_SECONDS,
+                        timeout_seconds=STARTUP_PROBE_TIMEOUT_SECONDS,
+                        failure_threshold=STARTUP_PROBE_FAILURE_THRESHOLD,
+                    ),
                     envs=[
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="TAXONOMY_MONGODB_URI",
@@ -555,6 +598,12 @@ def _deploy_cloud_run_service(
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="PLAIN_PERSONAL_DATA_FIELDS",
                             value=backend_service_cfg.plain_personal_data_fields or "{}"),
+                        # Passed rather than left to the application's own default, so that
+                        # this budget and the startup probe below are set from one place and
+                        # cannot drift apart.
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="BACKEND_DATABASE_STARTUP_BUDGET_SECONDS",
+                            value=str(DATABASE_STARTUP_BUDGET_SECONDS)),
                         # Add more environment variables here
                     ],
                 )

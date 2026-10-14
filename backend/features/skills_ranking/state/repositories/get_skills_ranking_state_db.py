@@ -6,7 +6,8 @@ from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from common_libs.database.get_mongo_db_connection import get_mongo_db_connection
-from common_libs.database.utils import get_database_connection_info, require_healthy_database, initialize_mongo_db_indexes
+from common_libs.database.utils import database_startup_budget_seconds, \
+    get_database_connection_info, require_healthy_database, initialize_mongo_db_indexes
 from features.skills_ranking.config import get_skills_ranking_config
 
 # Global variables for singleton pattern
@@ -32,7 +33,8 @@ async def get_skills_ranking_state_db(mongo_db_uri: str = Depends(lambda: get_sk
                 database = get_mongo_db_connection(mongo_db_uri, database_name)
 
                 await require_healthy_database(database, label="Skills Ranking",
-                                               mongodb_uri=mongo_db_uri, logger=_logger)
+                                               mongodb_uri=mongo_db_uri, logger=_logger,
+                                               budget_seconds=database_startup_budget_seconds())
 
                 _logger.info("Connected to Skills Ranking MongoDB database: %s",
                              await get_database_connection_info(database))

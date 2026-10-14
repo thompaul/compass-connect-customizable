@@ -9,9 +9,18 @@ the cause survives, and the credential does not.
 """
 import asyncio
 import logging
+import os
 import unittest
 
+from pymongo.errors import AutoReconnect, ConfigurationError, OperationFailure, \
+    ServerSelectionTimeoutError
+
+from common_libs.database import utils
 from common_libs.database.utils import (
+    DEFAULT_STARTUP_BUDGET_SECONDS,
+    STARTUP_BUDGET_VARIABLE,
+    database_startup_budget_seconds,
+    is_transient_database_failure,
     mongo_health_error,
     open_mongo_client,
     redact_mongodb_uri,
@@ -52,7 +61,14 @@ class _Database:
 
 
 def run(coroutine):
-    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(coroutine)
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    try:
+        return loop.run_until_complete(coroutine)
+    finally:
+        # Closed here rather than left to the garbage collector, which runs it at interpreter
+        # shutdown when the selector is already gone and prints a traceback that looks like a
+        # test failure and is not.
+        loop.close()
 
 
 class RedactionTest(unittest.TestCase):
@@ -173,6 +189,165 @@ class RequireHealthyDatabaseTest(unittest.TestCase):
         run(require_healthy_database(_Database({"ok": 1.0}), label="Application",
                                      mongodb_uri=URI, logger=self.logger))
 
+
+
+# --- Who is allowed to give up, and when -----------------------------------------------
+#
+# The backend used to exit when a database did not answer within PyMongo's default 30
+# seconds. Cloud Run then destroyed the instance, waited, and started another - which
+# succeeded, every time, with the same image and the same credentials. The user paid just
+# under two minutes for a retry the process could have done itself in a quarter of a second.
+#
+# Neither of the two numbers that produced that was chosen by anyone: not the driver's 30
+# seconds, and not the platform's one-strike startup probe. These tests pin the decisions
+# that replaced them, and the one thing that must not change with them - that a deployment
+# which is simply wrong still stops at once and still says so.
+
+
+class _CountingDatabase(_Database):
+    """Fails with `outcome` for the first `failures` pings, then answers."""
+
+    def __init__(self, outcome, failures, name="compass_application"):
+        super().__init__(outcome, name)
+        self._remaining = failures
+        self.pings = 0
+        database = self
+
+        async def command(_name):
+            database.pings += 1
+            if database._remaining > 0:
+                database._remaining -= 1
+                raise outcome
+            return {"ok": 1.0}
+
+        self.client.admin.command = command
+
+
+class TransienceTest(unittest.TestCase):
+    """Which failures asking again could change the answer to."""
+
+    def test_a_connection_that_could_not_be_made_is_worth_retrying(self):
+        for failure in (ServerSelectionTimeoutError("no replica set members available"),
+                        AutoReconnect("connection pool paused")):
+            self.assertTrue(is_transient_database_failure(failure),
+                            f"{type(failure).__name__} would stop the deployment, but the three "
+                            f"failures this was written for all cleared within a minute")
+
+    def test_a_deployment_that_is_wrong_is_not(self):
+        """Waiting does not discover a different password."""
+        for failure in (OperationFailure("bad auth : authentication failed"),
+                        ConfigurationError("cannot resolve the SRV record"),
+                        utils.DatabaseRefusedPing("the server answered the ping with {'ok': 0.0}")):
+            self.assertFalse(is_transient_database_failure(failure),
+                             f"{type(failure).__name__} would be retried for the whole startup "
+                             f"budget before reporting what it already knew")
+
+
+class StartupBudgetTest(unittest.TestCase):
+    """The number the deployment sets, and what happens when it sets nonsense."""
+
+    def tearDown(self):
+        os.environ.pop(STARTUP_BUDGET_VARIABLE, None)
+
+    def test_the_deployment_decides(self):
+        os.environ[STARTUP_BUDGET_VARIABLE] = "150"
+        self.assertEqual(150.0, database_startup_budget_seconds())
+
+    def test_running_outside_a_deployment_still_has_a_budget(self):
+        self.assertEqual(DEFAULT_STARTUP_BUDGET_SECONDS, database_startup_budget_seconds())
+
+    def test_an_unusable_value_is_said_out_loud_rather_than_silently_meaning_zero(self):
+        """`float("")` and `float("none")` both raise; `int(...)` of a float string does too.
+        Any of them silently becoming "do not retry" would restore the old behaviour in a
+        deployment that believed it had configured one."""
+        for nonsense in ("", "none", "-1", "two minutes"):
+            os.environ[STARTUP_BUDGET_VARIABLE] = nonsense
+            with self.assertLogs("common_libs.database.utils", level="WARNING"):
+                self.assertEqual(DEFAULT_STARTUP_BUDGET_SECONDS, database_startup_budget_seconds(),
+                                 f"{nonsense!r} did not fall back to a usable budget")
+
+
+class RetryingStartupTest(unittest.TestCase):
+    def setUp(self):
+        self.logger = logging.getLogger("test-retrying-startup")
+        self.logger.propagate = False
+        self._pause = utils.SECONDS_BETWEEN_ATTEMPTS
+        utils.SECONDS_BETWEEN_ATTEMPTS = 0.01
+
+    def tearDown(self):
+        utils.SECONDS_BETWEEN_ATTEMPTS = self._pause
+
+    def test_a_database_that_answers_on_a_later_attempt_starts_the_application(self):
+        """
+        The measured case. Three cold starts failed and the retry moments later succeeded;
+        the retry was done by destroying the instance and starting a new one.
+        """
+        database = _CountingDatabase(ServerSelectionTimeoutError("no primary"), failures=3)
+        run(require_healthy_database(database, label="Application", mongodb_uri=URI,
+                                     logger=self.logger, budget_seconds=10))
+        self.assertEqual(4, database.pings, "the connection was not retried within the process")
+
+    def test_a_budget_that_runs_out_still_names_the_database_and_the_reason(self):
+        database = _CountingDatabase(ServerSelectionTimeoutError("no primary"), failures=99)
+        with self.assertRaises(RuntimeError) as raised:
+            run(require_healthy_database(database, label="Application", mongodb_uri=URI,
+                                         logger=self.logger, budget_seconds=0.05))
+        message = str(raised.exception)
+        self.assertIn("compass_application", message)
+        self.assertIn("ServerSelectionTimeoutError", message)
+        self.assertIn("attempts", message, "the operator cannot tell one attempt from twenty")
+        self.assertNotIn(PASSWORD, message)
+
+    def test_a_wrong_password_is_not_retried_for_the_whole_budget(self):
+        """
+        The half of the old design that was right, and has to survive the half that was not.
+        A budget of a hundred seconds must not become a hundred seconds of rediscovering
+        that the password is wrong.
+        """
+        database = _CountingDatabase(OperationFailure("bad auth : authentication failed"),
+                                     failures=99)
+        with self.assertRaises(RuntimeError) as raised:
+            run(require_healthy_database(database, label="Application", mongodb_uri=URI,
+                                         logger=self.logger, budget_seconds=100))
+        self.assertEqual(1, database.pings, "a wrong password was asked about more than once")
+        self.assertIn("bad auth", str(raised.exception))
+
+    def test_without_a_budget_nothing_is_retried(self):
+        """What a caller wants once the application is serving: a request must not sit
+        behind a minute of retries."""
+        database = _CountingDatabase(ServerSelectionTimeoutError("no primary"), failures=99)
+        with self.assertRaises(RuntimeError):
+            run(require_healthy_database(database, label="Application", mongodb_uri=URI,
+                                         logger=self.logger))
+        self.assertEqual(1, database.pings)
+
+
+class ClientTimeoutTest(unittest.TestCase):
+    """
+    The timeouts are set here, not inherited.
+
+    A working ping is answered in about 250ms and a failing one runs to the end of its
+    budget, so a long timeout buys a longer wait for the same answer. What the budget should
+    be spent on is attempts.
+    """
+
+    def test_reaching_a_server_is_given_seconds_not_half_a_minute(self):
+        client = open_mongo_client("mongodb://compass_user:%s@node-1:27017/" % PASSWORD)
+        options = client.options
+        self.assertEqual(utils.SERVER_SELECTION_TIMEOUT_MS / 1000,
+                         options.server_selection_timeout,
+                         "the driver's 30s default is back, and one attempt uses a fifth of "
+                         "the whole startup budget")
+        self.assertEqual(utils.CONNECT_TIMEOUT_MS / 1000, options.pool_options.connect_timeout)
+
+    def test_a_query_that_is_already_running_is_not_cut_short(self):
+        """Vector searches legitimately outlast anything that is right for a connection."""
+        client = open_mongo_client("mongodb://compass_user:%s@node-1:27017/" % PASSWORD)
+        self.assertIsNone(client.options.pool_options.socket_timeout)
+
+    def test_a_caller_can_still_override(self):
+        client = open_mongo_client("mongodb://node-1:27017/", serverSelectionTimeoutMS=1234)
+        self.assertEqual(1.234, client.options.server_selection_timeout)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

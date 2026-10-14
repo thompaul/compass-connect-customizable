@@ -4,7 +4,8 @@ from typing import Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
-from common_libs.database.utils import (get_database_connection_info, open_mongo_client,
+from common_libs.database.utils import (database_startup_budget_seconds,
+                                        get_database_connection_info, open_mongo_client,
                                         require_healthy_database)
 from common_libs.environment_settings.mongo_db_settings import MongoDbSettings
 from app.app_config import get_application_config
@@ -318,7 +319,8 @@ class CompassDBProvider:
                                                    cls._clients)
                     await require_healthy_database(database, label="Application",
                                                    mongodb_uri=settings.application_mongodb_uri,
-                                                   logger=cls._logger)
+                                                   logger=cls._logger,
+                                                   budget_seconds=database_startup_budget_seconds())
                     cls._logger.info("Connected to Application MongoDB database: %s",
                                      await get_database_connection_info(database))
                     cls._application_mongo_db = database
@@ -343,7 +345,8 @@ class CompassDBProvider:
                     )
                     await require_healthy_database(database, label="Userdata",
                                                    mongodb_uri=settings.userdata_mongodb_uri,
-                                                   logger=cls._logger)
+                                                   logger=cls._logger,
+                                                   budget_seconds=database_startup_budget_seconds())
                     cls._logger.info("Connected to Userdata MongoDB database: %s",
                                      await get_database_connection_info(database))
                     cls._userdata_mongo_db = database
@@ -361,7 +364,8 @@ class CompassDBProvider:
                                                 cls._clients)
                     await require_healthy_database(database, label="Taxonomy",
                                                    mongodb_uri=settings.taxonomy_mongodb_uri,
-                                                   logger=cls._logger)
+                                                   logger=cls._logger,
+                                                   budget_seconds=database_startup_budget_seconds())
                     cls._logger.info("Connected to Taxonomy MongoDB database: %s",
                                      await get_database_connection_info(database))
                     cls._taxonomy_mongo_db = database
@@ -381,7 +385,8 @@ class CompassDBProvider:
                     )
                     await require_healthy_database(database, label="Career Explorer",
                                                    mongodb_uri=settings.career_explorer_mongodb_uri,
-                                                   logger=cls._logger)
+                                                   logger=cls._logger,
+                                                   budget_seconds=database_startup_budget_seconds())
                     cls._logger.info("Connected to Career Explorer MongoDB database: %s",
                                      await get_database_connection_info(database))
                     cls._career_explorer_mongo_db = database
@@ -399,7 +404,8 @@ class CompassDBProvider:
                                                cls._clients)
                     await require_healthy_database(database, label="Metrics",
                                                    mongodb_uri=settings.metrics_mongodb_uri,
-                                                   logger=cls._logger)
+                                                   logger=cls._logger,
+                                                   budget_seconds=database_startup_budget_seconds())
                     cls._logger.info("Connected to Metrics MongoDB database: %s",
                                      await get_database_connection_info(database))
                     cls._metrics_mongo_db = database
@@ -419,7 +425,8 @@ class CompassDBProvider:
                     )
                     await require_healthy_database(database, label="Jobs",
                                                    mongodb_uri=settings.jobs_mongodb_uri,
-                                                   logger=cls._logger)
+                                                   logger=cls._logger,
+                                                   budget_seconds=database_startup_budget_seconds())
                     cls._logger.info("Connected to Jobs MongoDB database: %s",
                                      await get_database_connection_info(database))
                     cls._jobs_mongo_db = database

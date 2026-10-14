@@ -1,10 +1,42 @@
+import asyncio
 import logging
 import math
+import os
 import re
+import time
 from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo.errors import ConnectionFailure
+
+# How long one attempt to reach a database is given, and how far apart the attempts are.
+#
+# Measured rather than guessed. On a Cloud Run cold start against Atlas, a ping that is going
+# to succeed is answered in about 250ms, and the four databases after it share the connection
+# and are up about 20ms later. A ping that is going to fail does not take somewhat longer than
+# that: it runs to the end of whatever budget it is given, because the connection is not slow,
+# it is absent. Nothing in between has been observed.
+#
+# So a long timeout buys nothing but a longer wait for the same answer, and the useful thing
+# to do with a budget is to spend it on attempts. Five seconds is twenty times a working
+# connection, and retrying is what covers a dependency that is briefly out of reach.
+SERVER_SELECTION_TIMEOUT_MS = 5_000
+CONNECT_TIMEOUT_MS = 5_000
+
+# Far enough apart that a cold start does not spend its budget on a dependency that needs a
+# moment, close enough that it is not what the user is waiting for.
+SECONDS_BETWEEN_ATTEMPTS = 2.0
+
+# Overridden by BACKEND_DATABASE_STARTUP_BUDGET_SECONDS, which the deployment sets from the
+# same place it sets the startup probe, so the two cannot drift apart. The default is for
+# running outside a deployment, where there is no probe to be answerable to.
+DEFAULT_STARTUP_BUDGET_SECONDS = 150.0
+STARTUP_BUDGET_VARIABLE = "BACKEND_DATABASE_STARTUP_BUDGET_SECONDS"
+
+
+class DatabaseRefusedPing(Exception):
+    """The server was reached and answered the ping with something other than ``ok: 1``."""
 
 
 def redact_mongodb_uri(uri: str) -> str:
@@ -52,8 +84,16 @@ def open_mongo_client(mongodb_uri: str, **options) -> AsyncIOMotorClient:
 
     :raises RuntimeError: naming the redacted connection string and the driver's reason
     """
+    defaults = {
+        "serverSelectionTimeoutMS": SERVER_SELECTION_TIMEOUT_MS,
+        "connectTimeoutMS": CONNECT_TIMEOUT_MS,
+        # socketTimeoutMS is deliberately left at the driver's default of no limit. It governs
+        # an operation that is already running on a connection that already works, and this
+        # application runs vector searches that legitimately take longer than any number that
+        # would be right for reaching a server in the first place.
+    }
     try:
-        return AsyncIOMotorClient(mongodb_uri, **options)
+        return AsyncIOMotorClient(mongodb_uri, **{**defaults, **options})
     except Exception as e:  # noqa: BLE001 - re-raised, with something to act on
         raise RuntimeError(
             f"The connection string {redact_mongodb_uri(mongodb_uri)} cannot be used: "
@@ -92,6 +132,29 @@ async def get_database_connection_info(database: AsyncIOMotorDatabase) -> str:
     return connection_info
 
 
+async def mongo_ping_failure(client: AsyncIOMotorClient) -> Optional[BaseException]:
+    """
+    None if MongoDB answers a ping, otherwise what went wrong, unflattened.
+
+    The exception itself rather than a description of it, because the caller has to decide
+    whether trying again could change the answer, and the driver's class is what says so.
+    """
+    try:
+        result = await client.admin.command("ping")
+    except Exception as e:  # noqa: BLE001 - every failure is a diagnosis, not a crash
+        return e
+    if math.isclose(result.get("ok", 0.0), 1.0):
+        return None
+    return DatabaseRefusedPing(f"the server answered the ping with {result!r}")
+
+
+def describe_ping_failure(failure: BaseException, mongodb_uri: str = "") -> str:
+    """The driver's own account of a failure, with any password taken out of it."""
+    if isinstance(failure, DatabaseRefusedPing):
+        return str(failure)
+    return scrub_mongodb_credentials(f"{type(failure).__name__}: {failure}", mongodb_uri)
+
+
 async def mongo_health_error(client: AsyncIOMotorClient) -> Optional[str]:
     """
     None if MongoDB answers a ping, otherwise the driver's own account of why it did not.
@@ -103,17 +166,56 @@ async def mongo_health_error(client: AsyncIOMotorClient) -> Optional[str]:
     :param client: The MongoDB client to check
     :return: None when healthy, else a scrubbed one-line description of the failure
     """
+    failure = await mongo_ping_failure(client)
+    return None if failure is None else describe_ping_failure(failure)
+
+
+def is_transient_database_failure(failure: BaseException) -> bool:
+    """
+    Whether asking again could change the answer.
+
+    ``ConnectionFailure`` and everything under it - server selection timing out, a node lost,
+    a socket giving up - mean the driver could not reach a usable server. On a cold start that
+    is routinely temporary, and measurably so: three such failures in this project's logs each
+    cleared within a minute, on the same image, the same credentials and the same access list
+    as the attempt that had just failed.
+
+    Everything else is the deployment being wrong rather than unlucky. A wrong password and a
+    user without rights on the database arrive as ``OperationFailure``; a connection string
+    the driver cannot parse never reaches a ping at all, because ``open_mongo_client`` raises
+    while building the client. No amount of waiting changes any of those, so the process says
+    so at once instead of spending a startup budget rediscovering it.
+    """
+    return isinstance(failure, ConnectionFailure)
+
+
+def database_startup_budget_seconds() -> float:
+    """
+    How long the first connection to a database may go on being retried.
+
+    Set by the deployment from the same place it sets the Cloud Run startup probe, so that the
+    time the application gives itself and the time the platform gives the application cannot
+    drift apart. Read here rather than passed down from the top so that the number appears in
+    the same file as the retry that spends it.
+    """
+    raw = os.getenv(STARTUP_BUDGET_VARIABLE)
+    if raw is None:
+        return DEFAULT_STARTUP_BUDGET_SECONDS
     try:
-        result = await client.admin.command("ping")
-    except Exception as e:  # noqa: BLE001 - every failure is a diagnosis, not a crash
-        return scrub_mongodb_credentials(f"{type(e).__name__}: {e}")
-    if math.isclose(result.get("ok", 0.0), 1.0):
-        return None
-    return f"the server answered the ping with {result!r}"
+        budget = float(raw)
+    except ValueError:
+        budget = -1.0
+    if budget < 0:
+        logging.getLogger(__name__).warning(
+            "%s is %r, which is not a number of seconds; using %.0fs.",
+            STARTUP_BUDGET_VARIABLE, raw, DEFAULT_STARTUP_BUDGET_SECONDS)
+        return DEFAULT_STARTUP_BUDGET_SECONDS
+    return budget
 
 
 async def require_healthy_database(database: AsyncIOMotorDatabase, *, label: str,
-                                   mongodb_uri: str, logger: logging.Logger) -> None:
+                                   mongodb_uri: str, logger: logging.Logger,
+                                   budget_seconds: float = 0.0) -> None:
     """
     Raise unless the database answers a ping, naming which one and why it did not.
 
@@ -123,16 +225,42 @@ async def require_healthy_database(database: AsyncIOMotorDatabase, *, label: str
     host, a TLS error and an IP the cluster will not admit all produced that same
     sentence, so the first move was always to guess.
 
+    ``budget_seconds`` is how long a failure that could clear on its own is retried for. The
+    default of zero is one attempt, which is what a caller wants once the application is
+    serving: a request should not sit behind a minute of retries. Startup passes a real budget,
+    because the alternative there is not failing faster, it is the container exiting and the
+    platform starting another one - the same retry, costing the user an instance and a minute
+    instead of a second and nothing.
+
+    A failure that waiting cannot fix is raised at once whatever the budget says.
+
     :raises RuntimeError: with the database, the redacted connection string and the cause
     """
-    failure = await mongo_health_error(database.client)
-    if failure is None:
-        return
+    deadline = time.monotonic() + budget_seconds
+    attempt = 0
 
-    message = (f"The {label} database '{database.name}' at {redact_mongodb_uri(mongodb_uri)} "
-               f"did not answer a ping: {scrub_mongodb_credentials(failure, mongodb_uri)}")
-    logger.warning(message)
-    raise RuntimeError(message)
+    while True:
+        attempt += 1
+        failure = await mongo_ping_failure(database.client)
+        if failure is None:
+            if attempt > 1:
+                logger.info("The %s database answered on attempt %d.", label, attempt)
+            return
+
+        message = (f"The {label} database '{database.name}' at {redact_mongodb_uri(mongodb_uri)} "
+                   f"did not answer a ping: {describe_ping_failure(failure, mongodb_uri)}")
+        remaining = deadline - time.monotonic()
+
+        if not is_transient_database_failure(failure) or remaining < SECONDS_BETWEEN_ATTEMPTS:
+            if attempt > 1:
+                message = (f"{message} - given up on after {attempt} attempts over "
+                           f"{budget_seconds:.0f}s")
+            logger.warning(message)
+            raise RuntimeError(message)
+
+        logger.warning("%s - trying again in %.0fs, %.0fs of the startup budget left.",
+                       message, SECONDS_BETWEEN_ATTEMPTS, remaining)
+        await asyncio.sleep(SECONDS_BETWEEN_ATTEMPTS)
 
 
 async def initialize_mongo_db_indexes(database: AsyncIOMotorDatabase, collection_name: str, indexes: list, logger: logging.Logger):

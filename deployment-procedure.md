@@ -568,6 +568,62 @@ How this happens depends on `dns:delegation_provider`:
 > **A rebuilt zone gets new nameservers.** If the `dns` stack is destroyed and recreated, the
 > delegation must be updated — the old records point at nameservers that no longer exist.
 
+### Step 4.9.2: When the backend will not start.
+
+The backend refuses to serve if a database it needs does not answer. That is deliberate: an
+API that is up but cannot reach its data returns errors that look like application bugs, and
+the deployment that caused them is hours behind you by the time anyone reads them.
+
+But "does not answer" has two causes that want opposite treatment, and the backend now tells
+them apart by the driver's own error:
+
+| What happened | What the backend does | Why |
+|---|---|---|
+| Wrong password, a user without rights, a connection string the driver cannot parse | **Stops at once**, naming the database and the reason | Waiting does not discover a different password. The sooner you see it, the sooner you fix the `.env` |
+| Could not reach a server — server selection timed out, no primary, connection refused | **Keeps trying**, for up to 150 seconds, in the instance it already has | On a cold start this is routinely temporary. Measured: a working connection answers in about a quarter of a second, and failures observed in this project all cleared within a minute |
+
+**The numbers, and why they are what they are.** Cloud Run gives a starting container 240
+seconds to open its port (`STARTUP_PROBE_PERIOD_SECONDS` × `STARTUP_PROBE_FAILURE_THRESHOLD`
+in `iac/backend/deploy_backend.py`). The backend spends at most 150 of those reaching its
+databases (`DATABASE_STARTUP_BUDGET_SECONDS`, passed to the container as
+`BACKEND_DATABASE_STARTUP_BUDGET_SECONDS`). The gap is deliberate: whatever goes wrong, the
+**backend** reaches its limit first and writes a line saying which database and why, rather
+than the platform killing it mid-sentence and reporting only that a probe timed out.
+
+Change them together. A guard test fails if the backend's budget rises to within a minute of
+the platform's:
+
+```shell
+python3 backend/test_startup_budget.py   # from the iac directory
+```
+
+**What a transient failure looks like in the log.** Warnings while it retries, then either a
+connection or one final error:
+
+```
+The Application database 'x_application' at mongodb+srv://user:***@cluster.mongodb.net/ did not
+answer a ping: ServerSelectionTimeoutError: ... - trying again in 2s, 143s of the startup
+budget left.
+...
+The Application database answered on attempt 7.
+```
+
+The password is replaced with `***` in every one of these lines, so they can be pasted into a
+bug report as they stand.
+
+**If it exhausts the budget**, the last line says how many attempts over how long. At that
+point the dependency really is unreachable, and the thing to check is the database's own
+access list: the backend leaves through a fixed NAT address, which you can read with
+
+```shell
+pulumi stack output cloudrun_nat_gateway_egress_static_ip -C backend -s <REALM_NAME>.<ENVIRONMENT_NAME>
+```
+
+**`cloudrun:min_instance_count: 0`** means the service scales to nothing when idle, so every
+return from idle is a cold start and meets whatever a cold start meets. Setting it to `1`
+removes cold starts and costs an instance running permanently. That is a cost decision, not a
+fix, and the deployment works either way.
+
 The deployment is done in the flowing flow.
 
 ```mermaid
