@@ -140,3 +140,68 @@ function authenticate_gcloud() {
         echo "warning: No GOOGLE_APPLICATION_CREDENTIALS found. Assuming external authentication is already configured."
     fi
 }
+# The build timestamp, to the millisecond, on any platform.
+#
+# `date +%3N` is a GNU extension. BSD date has no %N at all, so on macOS it emits the digit
+# and the letter literally and every stamp built on a laptop reads ".3N" where the
+# milliseconds should be. Python is already required by these scripts - they call
+# formatters.py - so it is what is portable here.
+function build_timestamp() {
+  python3 -c 'import datetime
+now = datetime.datetime.now(datetime.timezone.utc)
+print(now.strftime("%Y-%m-%d %H:%M:%S.") + f"{now.microsecond // 1000:03d} UTC")'
+}
+
+# Fill in a version.json template, leaving nothing beside it.
+#
+# One copy, because the two build scripts had one each and both had the same two defects.
+#
+# Substitutes in a single pass to a temporary file rather than with `sed -i -e`. BSD sed reads
+# the argument after -i as a backup suffix, so -e became the suffix and every run wrote a
+# `version.json-e` next to the file. That file was created inside the build output, so it was
+# tarred with it, unpacked, copied into the bucket directory and published - carrying whatever
+# the file looked like before the last of the four substitutions, which is to say with
+# ###GITHUB_SHA### where the commit should be. It was readable on the public internet.
+#
+# The placeholder check at the end is the part that would have caught it. A version stamp that
+# still contains a placeholder is not a version stamp, and it must not be shipped quietly.
+function write_version_json() {
+  local _version_json_filename=$1
+  local _git_branch_tag_name=$2
+  local _git_commit_sha=$3
+  local _build_run=$4
+  local _directory
+  _directory=$(dirname "${_version_json_filename}")
+  local _temporary="${_version_json_filename}.writing"
+
+  # What was here before. The backend build leaves a `.bak` of its own beside the file and
+  # restores it on exit, so the thing to check is not "is this directory clean" but "did
+  # writing the stamp add anything to it".
+  local _before
+  _before=$(ls -A "${_directory}")
+
+  echo "info: setting the version info in $_version_json_filename"
+  sed -e "s|###date###|$(build_timestamp)|g" \
+      -e "s|###GITHUB_REF_NAME###|${_git_branch_tag_name}|g" \
+      -e "s|###GITHUB_RUN_NUMBER###|${_build_run}|g" \
+      -e "s|###GITHUB_SHA###|${_git_commit_sha}|g" \
+      "${_version_json_filename}" > "${_temporary}"
+  mv "${_temporary}" "${_version_json_filename}"
+
+  if grep -q '###' "${_version_json_filename}"; then
+    echo "error: $_version_json_filename still contains a placeholder after substitution:"
+    grep -n '###' "${_version_json_filename}"
+    exit 1
+  fi
+
+  local _added
+  _added=$(comm -13 <(echo "$_before" | sort) <(ls -A "${_directory}" | sort))
+  if [ -n "$_added" ]; then
+    echo "error: writing the version stamp created files beside it, and for the frontend"
+    echo "       build this directory is tarred, unpacked and published as it stands:"
+    echo "$_added"
+    exit 1
+  fi
+
+  cat "$_version_json_filename"
+}

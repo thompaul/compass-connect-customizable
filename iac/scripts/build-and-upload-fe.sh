@@ -12,19 +12,6 @@ fi
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 ####################################
 
-function write_version_json() {
-  local _version_json_filename=$1
-  local _git_branch_tag_name=$2
-  local _git_commit_sha=$3
-  local _build_run=$4
-
-  echo "info: setting the version info in $_version_json_filename"
-  sed -i -e "s|\###date###|$(date -u +%F' %T.%3N UTC')|g" "${_version_json_filename}"
-  sed -i -e "s|\###GITHUB_REF_NAME###|$_git_branch_tag_name|g" "${_version_json_filename}"
-  sed -i -e "s|\###GITHUB_RUN_NUMBER###|$_build_run|g" "${_version_json_filename}"
-  sed -i -e "s|\###GITHUB_SHA###|$_git_commit_sha|g" "${_version_json_filename}"
-  cat "$_version_json_filename"
-}
 
 function save_report() {
   local _report_filename=$1
@@ -34,7 +21,7 @@ function save_report() {
   local _newline='  ' # in markdown, two spaces are needed for a newline
   {
     echo "### ${_frontend_type} artifacts packaging summary"
-    echo "**Date**: \`$(date -u +%F' %T.%3N UTC')\`$_newline"
+    echo "**Date**: \`$(build_timestamp)\`$_newline"
     echo "**Status**: ✅ Successfully uploaded$_newline"
     echo "**Version**: \`$_deployable_version\`$_newline"
     echo "**version.json**:$_newline"

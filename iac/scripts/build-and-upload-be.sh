@@ -20,7 +20,7 @@ function save_report() {
 
   {
     echo "### Backend artifacts packaging summary"
-    echo "**Date**: \`$(date -u +%F' %T.%3N UTC')\`     "
+    echo "**Date**: \`$(build_timestamp)\`     "
     echo "**status**: ✅ Successfully uploaded       "
     echo "**Docker version**: \`$_deployable_docker_tag\`    "
     echo "**version.json**:     "
@@ -31,19 +31,6 @@ function save_report() {
   } >> "$_report_filename"
 }
 
-function write_version_json() {
-  local _version_json_filename=$1
-  local _git_branch_tag_name=$2
-  local _git_commit_sha=$3
-  local _build_run=$4
-
-  echo "info: setting the version info in $_version_json_filename"
-  sed -i -e "s|\###date###|$(date -u '+%F %T.%3N UTC')|g" "${_version_json_filename}"
-  sed -i -e "s|\###GITHUB_REF_NAME###|$_git_branch_tag_name|g" "${_version_json_filename}"
-  sed -i -e "s|\###GITHUB_RUN_NUMBER###|$_build_run|g" "${_version_json_filename}"
-  sed -i -e "s|\###GITHUB_SHA###|$_git_commit_sha|g" "${_version_json_filename}"
-  cat "$_version_json_filename"
-}
 
 function build_and_upload_be_docker_img() {
   local _region=$1
