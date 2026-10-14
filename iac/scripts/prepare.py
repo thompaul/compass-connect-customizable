@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import subprocess
 import sys
 import uuid
 import datetime
@@ -19,7 +18,7 @@ iac_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # so that we can import the iac/lib module when we run pulumi from withing the iac/scripts directory.
 sys.path.insert(0, iac_folder)
 
-from lib.branding_assets import branding_archive_name, unpack_assets, unpacked_assets_dir
+from lib.branding_assets import branding_archive_name, fetch_deployment_assets, unpacked_assets_dir
 from frontend.prepare_frontend import download_frontend_bundle
 from admin_frontend.prepare_admin_frontend import download_admin_frontend_bundle
 
@@ -84,9 +83,11 @@ def _download_branding_assets(*, realm_name: str, stack_name: str, version: Vers
     Fetch this deployment's own asset files, if it uploaded any.
 
     A deployment that supplied none is the ordinary case and not an error: it shows the
-    product's own marks. So a missing archive is reported and passed over, while a present
-    one that cannot be unpacked is not - a corrupt or hostile archive must not quietly
-    become "no branding".
+    product's own marks. Whether it supplied any is asked of the repository rather than
+    inferred from a download failing, because every other way the download can fail - no
+    permission, no network, a file of the same name already on disk - used to be
+    indistinguishable from supplying none, and the deployment went on to serve the previous
+    deployment's logos and documents under this one's name.
     """
     formatted_version = construct_artifacts_version(
         git_branch_name=version.git_branch_name,
@@ -96,24 +97,20 @@ def _download_branding_assets(*, realm_name: str, stack_name: str, version: Vers
     generic_repository = realm_outputs["generic_repository"].value
 
     archive_name = branding_archive_name(stack_name)
-    download_dir = os.path.join(templates_dir, "branding-archives", stack_name)
-    os.makedirs(download_dir, exist_ok=True)
+    supplied = fetch_deployment_assets(
+        repository=generic_repository,
+        version=formatted_version,
+        archive_name=archive_name,
+        download_dir=os.path.join(templates_dir, "branding-archives", stack_name),
+        unpacked_dir=unpacked_assets_dir(iac_folder, stack_name),
+        download=download_generic_artifacts_file,
+    )
 
-    try:
-        download_generic_artifacts_file(
-            repository=generic_repository,
-            output_dir=download_dir,
-            version=formatted_version,
-            file_name=archive_name,
-        )
-    except subprocess.CalledProcessError:
+    if supplied:
+        print(f"info: unpacked this deployment's own assets from {archive_name}")
+    else:
         print(f"info: no {archive_name} at {formatted_version}; this deployment shows "
               f"Compass Connect's own marks wherever it has not given a full URL of its own.")
-        return
-
-    unpack_assets(os.path.join(download_dir, archive_name),
-                  unpacked_assets_dir(iac_folder, stack_name))
-    print(f"info: unpacked this deployment's own assets from {archive_name}")
 
 
 def _download_artifacts_and_config(_realm_name: str, _artifacts_version: Version, _deployment_number: str):

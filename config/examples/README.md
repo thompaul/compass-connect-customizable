@@ -62,6 +62,10 @@ The same three commands. Nothing is rebuilt: the frontend bundle that is downloa
 partner-neutral, and everything in the table above is applied to it at deployment time. Replace
 `assets/`, re-run `inject-config.py` and `setup_env.py`, and deploy again.
 
+Each deployment starts from nothing: the files the last one fetched are cleared before this
+one's are fetched, so a logo or a document you take out of `assets/` goes away rather than
+staying behind. Removing `assets/` altogether puts Compass Connect's own marks back.
+
 Two things to expect:
 
 - **The documents change immediately.** `content/` is served with `no-store`, because a

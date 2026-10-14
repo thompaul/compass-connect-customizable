@@ -23,6 +23,7 @@ Runnable directly: `python3 lib/test_branding_assets.py` from the iac directory.
 """
 import importlib.util
 import os
+import shutil
 import sys
 import tarfile
 import tempfile
@@ -45,6 +46,8 @@ unpack_assets = _module.unpack_assets
 unpacked_assets_dir = _module.unpacked_assets_dir
 CONTENT_DIRECTORY_NAME = _module.CONTENT_DIRECTORY_NAME
 content_documents = _module.content_documents
+fetch_deployment_assets = _module.fetch_deployment_assets
+generic_artifacts_file_exists = _module.generic_artifacts_file_exists
 
 
 def _is_no_cache():
@@ -342,6 +345,218 @@ def test_a_documents_directory_is_served_without_caching():
         "an entry without a trailing slash is being treated as a prefix, so files that merely "
         "begin with a listed name - data/env.js and data/env.json - are not told apart")
 
+
+
+# --- What a deployment finds on disk when it is not the first one into an environment -------
+#
+# These directories have the same paths on every deployment of a given environment, so the
+# second deployment of a changed configuration starts by looking at the first one's files.
+# Getting this wrong does not fail: it produces a site that is neither configuration, with
+# the new one's name in `env.js` and the old one's logos and documents in the bucket, and all
+# five smoke tests passing. So each of these tests is written as the thing the operator would
+# have seen, not as a call that returns the right value.
+
+
+# The archive's name comes from the environment, not from the configuration, so both
+# deployments below ask for the same file name - which is the whole mechanism. The one on disk
+# from the first deployment is the one the second cannot write over.
+STACK = "myrealm.prod"
+ARCHIVE = branding_archive_name(STACK)
+
+
+class _Repository:
+    """A generic repository holding one configuration's kit, which records what is asked of it."""
+
+    def __init__(self, configuration=None):
+        self.configuration = configuration
+        self.asked = []
+        self.downloaded = []
+
+    def exists(self, *, repository, file_name, version):
+        self.asked.append((file_name, version))
+        return self.configuration is not None
+
+    def download(self, *, repository, output_dir, version, file_name):
+        self.downloaded.append((file_name, version))
+        assert self.configuration is not None, "downloaded a file the repository does not hold"
+        destination = os.path.join(output_dir, file_name)
+        if os.path.exists(destination):
+            # What the real `gcloud artifacts files download` does, and the origin of the
+            # defect: it will not write over a file already sitting in the destination, and
+            # the destination's path is the same on every deployment.
+            raise ChildProcessError(f"{destination}: File exists")
+        kit = os.path.join(output_dir, "_kit")
+        _write(os.path.join(kit, f"{self.configuration}-logo.svg"))
+        pack_assets(kit, destination)
+        shutil.rmtree(kit)
+
+
+def _deploy(repository, root):
+    """One `prepare.py` run's worth of asset fetching, against the paths it would use."""
+    return fetch_deployment_assets(
+        repository={"name": "r", "location": "l", "project": "p"},
+        version="branch.sha.salt",
+        archive_name=ARCHIVE,
+        download_dir=os.path.join(root, "scripts", "_tmp", "branding-archives", STACK),
+        unpacked_dir=unpacked_assets_dir(root, STACK),
+        download=repository.download,
+        exists=repository.exists,
+    )
+
+
+def test_deploying_a_changed_configuration_twice_in_a_row_serves_the_second_one():
+    """
+    The defect, as the operator met it: the second deployment kept the first one's files.
+
+    Both deployments ask for the same file name, because it is the environment's name. The
+    first leaves that file in a directory whose path does not change, and the download
+    refuses to write over it. That refusal used to be read as "this deployment supplied no
+    assets" - so the unpack never ran, and because the clearing of the unpacked directory
+    lived inside the unpack, the first deployment's files were still there for the next step
+    to copy over the second one's bundle.
+    """
+    with tempfile.TemporaryDirectory() as root:
+        assert _deploy(_Repository("northway"), root) is True
+        unpacked = unpacked_assets_dir(root, STACK)
+        assert os.listdir(unpacked) == ["northway-logo.svg"]
+
+        assert _deploy(_Repository("southline"), root) is True
+        present = sorted(os.listdir(unpacked))
+        assert present == ["southline-logo.svg"], (
+            f"the second deployment is about to serve {present}; a file from the first one "
+            f"survived into it, which is how a site ends up named for one configuration and "
+            f"wearing another's logos")
+
+
+def test_a_download_that_fails_for_any_other_reason_stops_the_deployment():
+    """
+    The catch used to be `except subprocess.CalledProcessError`, which is every non-zero exit:
+    no permission, no network, and a file already on disk all arrived as "supplied none".
+
+    There is no catch now. The archive's existence is established before the download starts,
+    so anything that goes wrong after that is a reason to stop.
+    """
+    class _Fails(_Repository):
+        def download(self, **kwargs):
+            raise ChildProcessError("PERMISSION_DENIED: artifactregistry.files.get")
+
+    with tempfile.TemporaryDirectory() as root:
+        try:
+            _deploy(_Fails("southline"), root)
+        except ChildProcessError as e:
+            assert "PERMISSION_DENIED" in str(e), (
+                "the reason the download failed did not survive to the operator")
+        else:
+            raise AssertionError(
+                "a download that failed was reported as a deployment that supplied no assets")
+
+
+def test_supplied_no_assets_is_only_said_when_it_supplied_none():
+    """
+    The return value is what the caller prints, so it is the message.
+
+    False may be returned only when the repository was asked and said no - not when it could
+    not be asked, and not when the answer was yes and something later went wrong.
+    """
+    with tempfile.TemporaryDirectory() as root:
+        empty = _Repository()
+        assert _deploy(empty, root) is False
+        assert empty.asked == [(ARCHIVE, "branch.sha.salt")], (
+            "the repository was not asked, so 'supplied none' is a guess")
+        assert empty.downloaded == [], "a file known not to be there was downloaded anyway"
+
+
+def test_the_unpacked_directory_cannot_outlive_the_archive_it_came_from():
+    """
+    A deployment that supplied assets, then stopped supplying them.
+
+    Removing `assets/` from a configuration directory is how an operator goes back to the
+    product's own marks. If the unpacked files survive that, the operator is told they are
+    seeing Compass Connect's marks while the bucket still serves their own.
+    """
+    with tempfile.TemporaryDirectory() as root:
+        assert _deploy(_Repository("southline"), root) is True
+        unpacked = unpacked_assets_dir(root, STACK)
+        assert os.listdir(unpacked)
+
+        assert _deploy(_Repository(), root) is False
+        assert not os.path.exists(unpacked), (
+            "the previous deployment's files are still on disk for `apply_assets` to find and "
+            "copy over a bundle that is meant to be showing the product's own marks")
+
+
+def test_nothing_of_the_last_deployment_survives_a_run_that_stops_half_way():
+    """
+    `prepare.py` can fail, and the operator's next move is to run it again - or, if they
+    believe the artifacts are already in place, to run `up.py`. Either way the files left on
+    disk get published, so a run that did not finish must not leave any.
+    """
+    class _Fails(_Repository):
+        def download(self, **kwargs):
+            raise ChildProcessError("the network went away")
+
+    with tempfile.TemporaryDirectory() as root:
+        _deploy(_Repository("northway"), root)
+        unpacked = unpacked_assets_dir(root, STACK)
+        assert os.listdir(unpacked)
+
+        try:
+            _deploy(_Fails("southline"), root)
+        except ChildProcessError:
+            pass
+        assert not os.path.exists(unpacked), (
+            "a deployment that failed left the one before it on disk, where the next command "
+            "will publish it")
+
+
+def test_the_existence_question_and_the_download_are_asked_of_the_same_place():
+    """
+    Two gcloud invocations that have to agree on repository, package and version. They are
+    built in different modules - the question here, the download in the module that imports
+    pulumi - so the arguments are compared without importing either.
+
+    Read out of the source rather than called, because calling them means gcloud and a realm.
+    The pair is the fix: a question asked of one repository about a file downloaded from
+    another would answer "supplied none" for a deployment that supplied plenty, which is the
+    defect this replaced.
+    """
+    import ast
+
+    lib_dir = os.path.dirname(os.path.abspath(__file__))
+
+    def _argv(path, function_name):
+        tree = ast.parse(open(path).read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == function_name:
+                return {
+                    ast.unparse(element)
+                    for call in ast.walk(node) if isinstance(call, ast.Call)
+                    for argument in list(call.args) + [k.value for k in call.keywords]
+                    if isinstance(argument, (ast.List, ast.Tuple))
+                    for element in argument.elts
+                }
+        raise AssertionError(f"{function_name} is not in {path}, so this test is not testing it")
+
+    asking = _argv(os.path.join(lib_dir, "branding_assets.py"), "generic_artifacts_file_exists")
+    downloading = _argv(os.path.join(lib_dir, "std_pulumi.py"), "download_generic_artifacts_file")
+
+    def _passes(argv, flag):
+        return any(element.startswith(("f'" + flag, 'f"' + flag, "'" + flag, '"' + flag))
+                   for element in argv)
+
+    for flag in ["--repository=", "--location=", "--project="]:
+        assert _passes(asking, flag), f"the question does not pass {flag}"
+        assert _passes(downloading, flag), f"the download does not pass {flag}"
+
+    for name, argv in (("question", asking), ("download", downloading)):
+        assert "'artifacts'" in argv and "'files'" in argv, (
+            f"the {name} is no longer addressed to the generic artifact registry")
+        # Spelled differently on the two sides - a `--version=` flag on one, part of the
+        # `artifacts:<version>:<file>` identifier on the other - so what is pinned is that
+        # each interpolates the version it was handed rather than naming a fixed one.
+        assert any("{version}" in element for element in argv), (
+            f"the {name} does not pass the version it was given, so it would answer for "
+            f"some other build - and the two have to answer for the same one")
 
 if __name__ == "__main__":
     _failed = 0

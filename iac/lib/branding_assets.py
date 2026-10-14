@@ -233,6 +233,69 @@ def content_documents(*, bundle_dir: str, supported_locales: Optional[list] = No
     return documents
 
 
+def generic_artifacts_file_exists(*, repository: dict, file_name: str, version: str) -> bool:
+    """
+    Whether this file is in the repository at this version.
+
+    Asked, rather than inferred from a failure. The caller used to learn that a deployment had
+    supplied no assets from a non-zero exit code out of `gcloud artifacts files download` - and
+    a non-zero exit is also what a permission failure, a network failure, and a refusal to
+    overwrite a file already on disk all look like. The last of those happened on every
+    deployment after the first, and was reported as "this deployment supplied none" while the
+    previous deployment's files were served in its place.
+
+    A failure here is left to propagate. Not being able to ask is not the same as the answer
+    being no.
+    """
+    listed = subprocess.run(
+        ["gcloud", "artifacts", "files", "list",
+         f'--repository={repository["name"]}',
+         f'--location={repository["location"]}',
+         f'--project={repository["project"]}',
+         "--package=artifacts", f"--version={version}",
+         "--format=value(name)", f"--filter=name:{file_name}"],
+        check=True, capture_output=True, text=True)
+    return bool(listed.stdout.strip())
+
+
+def fetch_deployment_assets(*, repository: dict, version: str, archive_name: str,
+                            download_dir: str, unpacked_dir: str, download,
+                            exists=generic_artifacts_file_exists) -> bool:
+    """
+    Put this deployment's own asset files on disk, and nothing else.
+
+    Returns whether this deployment supplied any. Supplying none is ordinary and not an
+    error - it leaves the product's own marks in place - so it is reported rather than
+    raised.
+
+    Both directories are emptied before anything else happens, which is the whole point of
+    the function. They have the same paths on every deployment of a given environment, so
+    whatever is in them belongs to the deployment before this one, and every later step here
+    can fail. A deployment that stops half way through must not leave a previous
+    configuration's logos and documents behind for the next command to pick up and publish
+    under this one's name.
+
+    `download` is passed in rather than imported: the real one lives in a module that pulls
+    in pulumi, and this one is deliberately standard library only, so that the two
+    preparation scripts and the tests can all use it.
+    """
+    for directory in (download_dir, unpacked_dir):
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
+    os.makedirs(download_dir, exist_ok=True)
+
+    if not exists(repository=repository, file_name=archive_name, version=version):
+        return False
+
+    # Deliberately not guarded. Past this point the archive is known to be there, so every
+    # way the download can still fail is a reason to stop the deployment rather than a
+    # reason to go on and serve somebody else's branding.
+    download(repository=repository, output_dir=download_dir, version=version,
+             file_name=archive_name)
+    unpack_assets(os.path.join(download_dir, archive_name), unpacked_dir)
+    return True
+
+
 def upload_generic_artifacts_file(*, repository: dict, file_path: str, version: str) -> None:
     """
     Put a file in the realm's generic repository, replacing what is there at that version.
