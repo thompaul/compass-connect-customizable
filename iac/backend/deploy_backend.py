@@ -325,9 +325,14 @@ def _setup_nat_gateway(*,
 # the application reaches its own limit first and says which database and why, instead of the
 # platform killing it mid-sentence and reporting only that a probe failed.
 DATABASE_STARTUP_BUDGET_SECONDS = 150
-STARTUP_PROBE_PERIOD_SECONDS = 10
-STARTUP_PROBE_TIMEOUT_SECONDS = 5
-STARTUP_PROBE_FAILURE_THRESHOLD = 24
+# Polled often rather than seldom. The period is also how long a container that is *ready*
+# waits to be noticed: measured on a live cold start, uvicorn was listening at 08:40:34.9 and
+# the probe only saw it at 08:40:40.0, five seconds of a thirty-second start spent waiting for
+# the next check. The budget below is the same 240 seconds either way; this just spends it in
+# smaller pieces, so the cost of being wrong about readiness is three seconds, not ten.
+STARTUP_PROBE_PERIOD_SECONDS = 3
+STARTUP_PROBE_TIMEOUT_SECONDS = 3
+STARTUP_PROBE_FAILURE_THRESHOLD = 80
 
 # What `backend/Dockerfile` tells uvicorn to bind. Named here because a probe aimed at a port
 # nothing is listening on fails every time, for 240 seconds, and then reports only a timeout.

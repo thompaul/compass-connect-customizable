@@ -93,6 +93,25 @@ def test_the_application_reaches_its_own_limit_before_the_platform_does():
         f"interpreter can use up on its own")
 
 
+def test_a_ready_container_is_noticed_quickly():
+    """
+    The probe's period is also the delay between a container becoming ready and the platform
+    noticing. Measured on a live cold start before this was tightened: uvicorn was listening
+    at 08:40:34.9 and the probe saw it at 08:40:40.0 - five seconds of a thirty-second start
+    spent waiting for the next check, on every cold start, for nothing.
+    """
+    constants = _constants()
+    period = constants[_startup_probe()["period_seconds"]]
+    assert period <= 5, (
+        f"a ready container waits up to {period}s to be noticed, which is added to every cold "
+        f"start the user sits through")
+
+    timeout = constants[_startup_probe()["timeout_seconds"]]
+    assert timeout <= period, (
+        f"the probe is given {timeout}s to answer but is only run every {period}s, which Cloud "
+        f"Run rejects")
+
+
 def test_the_budget_reaches_the_application_that_spends_it():
     """
     A number declared here and defaulted there is two numbers. The container is told what it
