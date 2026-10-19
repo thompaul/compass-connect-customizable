@@ -126,6 +126,35 @@ def test_the_publishing_credential_is_named_for_publishing():
             f"{name} no longer falls back to the old secret name, so a repository that has only "
             f"set that one stops publishing without being told why")
 
+
+def test_no_workflow_names_an_organisation_it_does_not_own():
+    """
+    `deploy.yml` ran `pulumi org set-default tabiya-tech`, so every fork of this pipeline
+    acted in that organisation's stacks with whatever access its token carried. The
+    organisation a deploy acts in is the account it belongs to, not a value in a file.
+
+    This is S2.1 — one of the patches a partner re-applies on every upgrade — reached through
+    the pipeline rather than through the infrastructure code.
+    """
+    for name in sorted(os.listdir(WORKFLOWS)):
+        if not name.endswith((".yml", ".yaml")):
+            continue
+        for line in _text(name).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            assert "org set-default tabiya" not in stripped, (
+                f"{name} sets a Pulumi organisation by name:\n    {stripped}")
+
+
+def test_the_deploy_refuses_rather_than_guessing_an_organisation():
+    text = _text("deploy.yml")
+    assert "vars.PULUMI_ORG" in text, (
+        "deploy.yml does not read the organisation from a repository variable")
+    assert "PULUMI_ORG is not set" in text, (
+        "deploy.yml does not stop when no organisation is configured, so it would deploy "
+        "into whichever one a default happened to name")
+
 if __name__ == "__main__":
     _failed = 0
     for _name, _test in sorted(globals().items()):
