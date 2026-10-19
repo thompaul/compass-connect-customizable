@@ -1,0 +1,113 @@
+name: Publish the product
+
+# Build the product once and put it where every deployment can fetch it.
+#
+# The existing CI builds the same artifacts and uploads them into a realm's own root project,
+# which is why a partner has to build the product before deploying it: there is nowhere else
+# for it to come from. This workflow runs the same builds, through the same scripts, against a
+# project that publishes them for everyone.
+#
+# Deliberately manual. Publishing a release that other people's deployments will pull is a
+# decision, not something a push should do by accident, and this repository is a prototype
+# standing in for the product's own.
+#
+# The destination repositories must allow the people who will pull from them to read - for a
+# public product that is `allUsers` with roles/artifactregistry.reader on each. That is an IAM
+# change, made once, outside this workflow. Allow a few minutes after granting it: the binding
+# takes effect slowly enough to look like a failure.
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifacts-project:
+        required: true
+        type: string
+        description: 'Google Cloud project whose Artifact Registry receives the product'
+      publish-backend:
+        required: false
+        type: boolean
+        default: true
+        description: 'Build and publish the backend container image'
+      publish-frontend:
+        required: false
+        type: boolean
+        default: true
+        description: 'Build and publish the frontend bundle'
+      publish-admin-frontend:
+        required: false
+        type: boolean
+        default: true
+        description: 'Build and publish the admin frontend bundle'
+      publish-templates:
+        required: false
+        type: boolean
+        default: true
+        description: 'Publish the environment and stack-config templates'
+
+jobs:
+  # Everything below reuses the workflows the product already builds with, rather than
+  # repeating their steps. A second copy of a build is a second thing to keep correct, and the
+  # change that matters here is only where the result is sent.
+
+  backend:
+    if: ${{ inputs.publish-backend }}
+    uses: ./.github/workflows/backend-ci.yml
+    secrets: inherit
+    with:
+      upload-artifacts: true
+      artifacts-project: ${{ inputs.artifacts-project }}
+
+  frontend:
+    if: ${{ inputs.publish-frontend }}
+    uses: ./.github/workflows/frontend-ci.yml
+    secrets: inherit
+    with:
+      upload-artifacts: true
+      artifacts-project: ${{ inputs.artifacts-project }}
+
+  admin-frontend:
+    if: ${{ inputs.publish-admin-frontend }}
+    uses: ./.github/workflows/admin-frontend-ci.yml
+    secrets: inherit
+    with:
+      upload-artifacts: true
+      artifacts-project: ${{ inputs.artifacts-project }}
+
+  templates:
+    if: ${{ inputs.publish-templates }}
+    uses: ./.github/workflows/config-ci.yml
+    secrets: inherit
+    with:
+      artifacts-project: ${{ inputs.artifacts-project }}
+
+  # A deployment fetches all four at one version, derived from the branch and commit. Publishing
+  # three of them is not a release, and the failure arrives later, in somebody else's deploy,
+  # as an artifact that cannot be found.
+  published:
+    needs: [backend, frontend, admin-frontend, templates]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report what was published
+        shell: bash
+        run: |
+          set -euo pipefail
+          incomplete=0
+          for job in "${{ needs.backend.result }}" "${{ needs.frontend.result }}" \
+                     "${{ needs.admin-frontend.result }}" "${{ needs.templates.result }}"; do
+            [ "$job" = "success" ] || [ "$job" = "skipped" ] || incomplete=1
+          done
+          {
+            echo "### Product published to \`${{ inputs.artifacts-project }}\`"
+            echo ""
+            echo "| artifact | result |"
+            echo "| --- | --- |"
+            echo "| backend image | ${{ needs.backend.result }} |"
+            echo "| frontend bundle | ${{ needs.frontend.result }} |"
+            echo "| admin frontend bundle | ${{ needs.admin-frontend.result }} |"
+            echo "| templates | ${{ needs.templates.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$incomplete" = "1" ]; then
+            echo "::error::Part of the product did not publish. A deployment fetches all four at one version, so this is not a usable release."
+            exit 1
+          fi

@@ -2,6 +2,16 @@ name: Upload configurations and templates
 
 on:
   workflow_call:
+    inputs:
+      artifacts-project:
+        required: false
+        type: string
+        default: ''
+        description: >
+          The Google Cloud project whose Artifact Registry receives the build. Empty means the
+          realm's own root project, which is what every existing caller gets and what this
+          repository has always done. Set it to a project that publishes the product for
+          everyone, so that a deployment can run artifacts it did not build.
 
 jobs:
   upload-templates:
@@ -20,4 +30,4 @@ jobs:
       - name: upload templates
         working-directory: iac
         run: |
-          ./scripts/upload-templates.sh ${{ vars.ARTIFACT_REGISTRY_REGION }} ${{ secrets.GCP_REALM_ROOT_PROJECT_ID }}
+          ./scripts/upload-templates.sh ${{ vars.ARTIFACT_REGISTRY_REGION }} ${{ inputs.artifacts-project || secrets.GCP_REALM_ROOT_PROJECT_ID }}

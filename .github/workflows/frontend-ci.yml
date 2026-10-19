@@ -7,6 +7,15 @@ on:
         required: true
         type: boolean
         description: 'Whether to upload deployable artifacts'
+      artifacts-project:
+        required: false
+        type: string
+        default: ''
+        description: >
+          The Google Cloud project whose Artifact Registry receives the build. Empty means the
+          realm's own root project, which is what every existing caller gets and what this
+          repository has always done. Set it to a project that publishes the product for
+          everyone, so that a deployment can run artifacts it did not build.
 
 jobs:
   test:
@@ -101,7 +110,7 @@ jobs:
       - name: Run build and upload script.
         shell: bash
         run: |
-          ./iac/scripts/build-and-upload-fe.sh ${{ vars.ARTIFACT_REGISTRY_REGION }} ${{ secrets.GCP_REALM_ROOT_PROJECT_ID }} $GITHUB_STEP_SUMMARY $GITHUB_RUN_NUMBER frontend
+          ./iac/scripts/build-and-upload-fe.sh ${{ vars.ARTIFACT_REGISTRY_REGION }} ${{ inputs.artifacts-project || secrets.GCP_REALM_ROOT_PROJECT_ID }} $GITHUB_STEP_SUMMARY $GITHUB_RUN_NUMBER frontend
         env:
           # sentry token is required to upload sourcemaps.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
