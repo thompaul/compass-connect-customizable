@@ -109,6 +109,23 @@ def test_the_destination_reaches_every_build():
             f"default while the others go to the product")
 
 
+
+def test_the_publishing_credential_is_named_for_publishing():
+    """
+    The four builds authenticated with a secret named for an environment tier to write into a
+    root project's Artifact Registry, which is neither a lower nor an upper environment. The
+    name contradicted the job, and anyone setting it up had to be told to put one tier's key in
+    a secret named for the other.
+    """
+    for name in BUILD_WORKFLOWS:
+        text = _text(name)
+        assert "GCP_ARTIFACTS_SERVICE_ACCOUNT_JSON" in text, (
+            f"{name} authenticates with a credential named for an environment tier rather than "
+            f"for what it does")
+        assert "|| secrets.GCP_LOWER_ENVS_SERVICE_ACCOUNT_JSON" in text, (
+            f"{name} no longer falls back to the old secret name, so a repository that has only "
+            f"set that one stops publishing without being told why")
+
 if __name__ == "__main__":
     _failed = 0
     for _name, _test in sorted(globals().items()):

@@ -24,8 +24,13 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2.1.2
         with:
+          # Publishing is not an environment tier. This credential writes to a root
+          # project's Artifact Registry, which is neither a lower nor an upper environment, and
+          # naming it for one made every caller supply a credential whose name contradicted its
+          # job. GCP_ARTIFACTS_SERVICE_ACCOUNT_JSON says what it is for; the old name is still
+          # read, so a repository that has only set that one keeps working.
           credentials_json:
-            ${{ secrets.GCP_LOWER_ENVS_SERVICE_ACCOUNT_JSON }}
+            ${{ secrets.GCP_ARTIFACTS_SERVICE_ACCOUNT_JSON || secrets.GCP_LOWER_ENVS_SERVICE_ACCOUNT_JSON }}
 
       - name: upload templates
         working-directory: iac
