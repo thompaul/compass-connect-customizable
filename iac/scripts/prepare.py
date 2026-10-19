@@ -18,7 +18,8 @@ iac_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # so that we can import the iac/lib module when we run pulumi from withing the iac/scripts directory.
 sys.path.insert(0, iac_folder)
 
-from lib.branding_assets import branding_archive_name, fetch_deployment_assets, unpacked_assets_dir
+from lib.branding_assets import branding_archive_name, fetch_deployment_assets, \
+    product_repository, unpacked_assets_dir
 from frontend.prepare_frontend import download_frontend_bundle
 from admin_frontend.prepare_admin_frontend import download_admin_frontend_bundle
 
@@ -56,7 +57,7 @@ def _download_templates(*,
     # The product's own artifacts: templates and the two frontend bundles. These come from
     # wherever the realm says the product is published, which is its own repository unless a
     # publisher was configured.
-    realm_generic_repository = realm_outputs["product_generic_repository"].value
+    realm_generic_repository = product_repository(realm_outputs)
 
     current_templates_dir = construct_artifacts_dir(
         deployment_number=deployment_number,

@@ -11,7 +11,7 @@ iac_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # so that we can import the iac/lib module when we run pulumi from within the iac/admin-frontend directory.
 sys.path.insert(0, iac_folder)
 
-from lib.branding_assets import apply_assets
+from lib.branding_assets import product_repository, apply_assets
 from lib import getenv, get_realm_and_env_name_from_stack, \
     get_pulumi_stack_outputs, construct_artifacts_dir, save_content_in_file, \
     download_generic_artifacts_file, Version, base64_encode
@@ -60,7 +60,7 @@ def download_admin_frontend_bundle(
     # the generic repository name is defined in iac/realm/create_realm:_create_repositories method body
     # if it is not there python will raise `KeyError`, a good thing.
     # The admin bundle is the product, not this deployment's.
-    realm_generic_repository = realm_outputs["product_generic_repository"].value
+    realm_generic_repository = product_repository(realm_outputs)
 
     print(f"Downloading the admin frontend build bundle... to {artifacts_destination_dir}")
 

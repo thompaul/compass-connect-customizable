@@ -233,6 +233,25 @@ def content_documents(*, bundle_dir: str, supported_locales: Optional[list] = No
     return documents
 
 
+def product_repository(realm_outputs: dict) -> dict:
+    """
+    Where this realm fetches the product's own artifacts from.
+
+    `product_generic_repository` is exported by a realm that has been applied with the code
+    that knows about published products. A realm applied before that has only its own
+    `generic_repository`, and falls back to it - which is the same place it has always used, so
+    nothing changes for a deployment that has not opted in.
+
+    The fallback is what makes this safe to take. An environment is deployed far more often
+    than its realm, and without it every existing deployment would fail on the first command,
+    before anything is built, citing a stack output it has never heard of.
+    """
+    published = realm_outputs.get("product_generic_repository")
+    if published is not None and published.value:
+        return published.value
+    return realm_outputs["generic_repository"].value
+
+
 def generic_artifacts_file_exists(*, repository: dict, file_name: str, version: str) -> bool:
     """
     Whether this file is in the repository at this version.

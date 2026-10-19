@@ -33,9 +33,18 @@ def main():
     billing_account = getstackref(realm_reference, "billing_account_id", True)
     root_project_id = getstackref(realm_reference, "root_project_id")
     # The image the backend runs is the product. It comes from wherever the realm says the
-    # product is published, which is the realm's own repository unless a publisher was
-    # configured - so an unconfigured realm behaves exactly as before.
-    docker_repository = getstackref(realm_reference, "product_docker_repository")
+    # product is published, falling back to the realm's own repository.
+    #
+    # The fallback is not decoration. `product_docker_repository` only exists once the realm
+    # stack has been applied with the code that exports it, and an environment is deployed far
+    # more often than its realm. Without this, every existing deployment taking this branch
+    # fails here, before anything is built, with a message about a stack output it has never
+    # heard of - and the realm it would have to re-apply is the one stack nobody wants to touch
+    # to get a frontend change out.
+    docker_repository = pulumi.Output.all(
+        realm_reference.get_output("product_docker_repository"),
+        realm_reference.get_output("docker_repository"),
+    ).apply(lambda both: both[0] or both[1])
     base_domain_name = getstackref(realm_reference, "base_domain_name")
 
     # if the environment is prod, use the compass upper folder, otherwise use the compass lower folder
