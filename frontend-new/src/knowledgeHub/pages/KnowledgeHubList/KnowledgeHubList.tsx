@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { IsOnlineContext } from "src/app/isOnlineProvider/IsOnlineProvider";
 import { getConfiguredSectors } from "src/knowledgeHub/components/SectorProfile/sectorStaticData";
-import { getIllustrationUrls, getProductName } from "src/envService";
+import { getIllustrationUrls } from "src/envService";
 import { routerPaths } from "src/app/routerPaths";
 import Footer from "src/home/components/Footer/Footer";
 import BackLink from "src/navigation/BackLink/BackLink";

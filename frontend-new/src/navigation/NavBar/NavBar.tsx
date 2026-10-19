@@ -395,6 +395,11 @@ const NavBar: React.FC<NavBarProps> = ({ headerColor = "primary" }) => {
     handleLogout,
     hasMultipleLocales,
     triggerRebuildProfile,
+    // Both come from this deployment's configuration and do not change while the page is open,
+    // so declaring them costs nothing. Leaving them out is how a menu ends up offering an entry
+    // for something the deployment turned off.
+    hasFaq,
+    isKnowledgeHubEnabled,
   ]);
 
   const getNavLinkSx = (isActive: boolean, disabled = false) => ({
