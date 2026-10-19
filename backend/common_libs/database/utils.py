@@ -22,7 +22,26 @@ from pymongo.errors import ConnectionFailure
 # to do with a budget is to spend it on attempts. Five seconds is twenty times a working
 # connection, and retrying is what covers a dependency that is briefly out of reach.
 SERVER_SELECTION_TIMEOUT_MS = 5_000
-CONNECT_TIMEOUT_MS = 5_000
+
+# `connectTimeoutMS` is deliberately NOT set, and this is the correction of a mistake.
+#
+# It was lowered to five seconds alongside the number above, on the same reasoning. The
+# reasoning did not transfer. Server selection is what the retry loop below drives, so
+# shortening it turns one long wait into several attempts and is the whole point. Opening a
+# socket is not retried by anything here: it is done by the connection pool, on demand, for
+# every operation that needs a connection - and the startup sequence needs several, in
+# parallel, immediately after the ping succeeds.
+#
+# What that cost, observed on a deployment forced to start during a slow-egress window: the
+# ping was retried and answered on the third attempt, and five seconds later index creation
+# opened a new pool connection into the same unsettled network and failed, because it had been
+# given a quarter of the headroom it used to have.
+#
+# There is a second effect, less obvious and not fixed by this line. Retrying makes the ping
+# succeed sooner - the moment the network is reachable at all, rather than once it has settled
+# - so the operations after it now run earlier, in worse conditions, than they used to. Giving
+# the socket its full default again is necessary for that and may not be sufficient; the
+# startup sequence as a whole is still unretried. See S11.24.
 
 # Far enough apart that a cold start does not spend its budget on a dependency that needs a
 # moment, close enough that it is not what the user is waiting for.
@@ -85,8 +104,9 @@ def open_mongo_client(mongodb_uri: str, **options) -> AsyncIOMotorClient:
     :raises RuntimeError: naming the redacted connection string and the driver's reason
     """
     defaults = {
+        # Only server selection is shortened; see the constant's own note for why
+        # connectTimeoutMS is not, and what lowering it cost.
         "serverSelectionTimeoutMS": SERVER_SELECTION_TIMEOUT_MS,
-        "connectTimeoutMS": CONNECT_TIMEOUT_MS,
         # socketTimeoutMS is deliberately left at the driver's default of no limit. It governs
         # an operation that is already running on a connection that already works, and this
         # application runs vector searches that legitimately take longer than any number that

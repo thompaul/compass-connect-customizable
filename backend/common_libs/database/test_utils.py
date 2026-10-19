@@ -333,12 +333,38 @@ class ClientTimeoutTest(unittest.TestCase):
 
     def test_reaching_a_server_is_given_seconds_not_half_a_minute(self):
         client = open_mongo_client("mongodb://compass_user:%s@node-1:27017/" % PASSWORD)
-        options = client.options
-        self.assertEqual(utils.SERVER_SELECTION_TIMEOUT_MS / 1000,
-                         options.server_selection_timeout,
-                         "the driver's 30s default is back, and one attempt uses a fifth of "
-                         "the whole startup budget")
-        self.assertEqual(utils.CONNECT_TIMEOUT_MS / 1000, options.pool_options.connect_timeout)
+        selection = client.options.server_selection_timeout
+        self.assertEqual(utils.SERVER_SELECTION_TIMEOUT_MS / 1000, selection,
+                         "the client is not built from the constant, so the constant no longer "
+                         "describes what runs")
+        # Asserted as a bound rather than against the constant, which would follow it anywhere.
+        # The retry loop only buys attempts if one attempt is short; at the driver's 30s
+        # default a single attempt spends a fifth of the whole startup budget.
+        self.assertLessEqual(selection, 10.0,
+                             f"one attempt at reaching a server is given {selection}s, which is "
+                             f"long enough that retrying stops being the point")
+
+    def test_opening_a_socket_keeps_its_full_default(self):
+        """
+        The correction of a mistake, pinned so it is not made again.
+
+        Lowering `connectTimeoutMS` alongside server selection looked consistent and was wrong.
+        Server selection is what the retry loop drives, so shortening it buys attempts. Opening
+        a socket is not retried by anything: the pool does it on demand, for every operation
+        needing a connection, and the startup sequence needs several in parallel right after
+        the ping succeeds.
+
+        Observed when it was lowered: the ping was retried and answered on the third attempt,
+        then index creation opened a new pool connection five seconds later, into the same
+        unsettled network, and failed with a quarter of the headroom it used to have.
+        """
+        client = open_mongo_client("mongodb://compass_user:%s@node-1:27017/" % PASSWORD)
+        connect_timeout = client.options.pool_options.connect_timeout
+        self.assertEqual(
+            20.0, connect_timeout,
+            f"connectTimeoutMS is set to {connect_timeout}s rather than left at the driver's "
+            f"20s default. The retry loop does not cover opening a socket, so this is headroom "
+            f"taken from every operation in the startup sequence and given to nothing.")
 
     def test_a_query_that_is_already_running_is_not_cut_short(self):
         """Vector searches legitimately outlast anything that is right for a connection."""
