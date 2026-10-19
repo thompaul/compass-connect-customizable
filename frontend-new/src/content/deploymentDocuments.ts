@@ -71,9 +71,7 @@ export const selectDocument = (kind: DocumentKind, locale?: string): DeploymentD
   if (anyLanguage) return anyLanguage;
 
   const fallback = candidates[0];
-  console.warn(
-    `No ${kind} document for '${locale}'; showing the one written for '${fallback.locale}' instead.`
-  );
+  console.warn(`No ${kind} document for '${locale}'; showing the one written for '${fallback.locale}' instead.`);
   return fallback;
 };
 

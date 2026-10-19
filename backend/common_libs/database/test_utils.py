@@ -28,8 +28,12 @@ from common_libs.database.utils import (
     scrub_mongodb_credentials,
 )
 
-URI = "mongodb+srv://compass_user:sup3r-s3cret@cluster0.abcde.mongodb.net/?retryWrites=true"
-PASSWORD = "sup3r-s3cret"
+# An invented credential, and the point of the tests below: every one of them asserts that this
+# string does not reach a log line or an exception message. It has to be a literal for that to
+# mean anything - a password assembled at runtime would not prove the redaction works on the
+# shape a real connection string has.
+URI = "mongodb+srv://compass_user:sup3r-s3cret@cluster0.abcde.mongodb.net/?retryWrites=true"  # nosec B105 # invented credential, asserted never to be logged
+PASSWORD = "sup3r-s3cret"  # nosec B105 # invented credential, asserted never to be logged
 
 
 class _Admin:

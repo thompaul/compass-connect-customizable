@@ -65,10 +65,7 @@ describe("Footer", () => {
       expect(screen.getByTestId(DATA_TEST_ID.FOOTER_PARTNER_LOGO(0))).toBeInTheDocument();
       expect(screen.getByTestId(DATA_TEST_ID.FOOTER_PARTNER_LOGO(1))).toBeInTheDocument();
       // AND the contact link uses the declared address
-      expect(screen.getByTestId(DATA_TEST_ID.FOOTER_CONTACT_LINK)).toHaveAttribute(
-        "href",
-        "mailto:hello@example.org"
-      );
+      expect(screen.getByTestId(DATA_TEST_ID.FOOTER_CONTACT_LINK)).toHaveAttribute("href", "mailto:hello@example.org");
       // AND the declared attribution replaces the product's own
       expect(screen.getByTestId(DATA_TEST_ID.FOOTER_COLLABORATION)).toHaveTextContent(
         "Offered by the Example Ministry."

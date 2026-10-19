@@ -69,8 +69,6 @@ export const getEnabledModules = (): Module[] => {
 
   const present = new Set(enabled.map((module) => module.id));
   return enabled.map((module) =>
-    module.nextModuleId && !present.has(module.nextModuleId)
-      ? { ...module, nextModuleId: undefined }
-      : module
+    module.nextModuleId && !present.has(module.nextModuleId) ? { ...module, nextModuleId: undefined } : module
   );
 };

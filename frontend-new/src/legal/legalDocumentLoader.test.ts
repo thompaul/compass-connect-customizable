@@ -7,11 +7,7 @@ import "src/_test_utilities/consoleMock";
 // files can be read, in `iac/test_no_partner_defaults.py`.
 
 import * as documents from "src/content/deploymentDocuments";
-import {
-  getNotConfiguredLegalDocument,
-  hasLegalDocument,
-  loadLegalDocument,
-} from "src/legal/legalDocumentLoader";
+import { getNotConfiguredLegalDocument, hasLegalDocument, loadLegalDocument } from "src/legal/legalDocumentLoader";
 
 jest.mock("src/content/deploymentDocuments", () => ({
   hasDocument: jest.fn(() => false),
@@ -21,7 +17,7 @@ jest.mock("src/content/deploymentDocuments", () => ({
 const givenTheDeploymentPublished = (kinds: string[], text?: string) => {
   (documents.hasDocument as jest.Mock).mockImplementation((kind: string) => kinds.includes(kind));
   (documents.loadDocument as jest.Mock).mockImplementation((kind: string) =>
-    Promise.resolve(kinds.includes(kind) ? (text ?? "") : null)
+    Promise.resolve(kinds.includes(kind) ? text ?? "" : null)
   );
 };
 

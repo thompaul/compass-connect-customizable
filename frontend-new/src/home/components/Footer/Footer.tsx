@@ -25,7 +25,6 @@ export const COMPASS_CONNECT_URLS = {
   COMPASS: "https://github.com/tabiya-tech/compass",
 };
 
-
 interface FooterProps {
   sx?: SxProps<Theme>;
 }
