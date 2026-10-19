@@ -49,6 +49,15 @@ UNDELIVERED_BY_DESIGN = {
     "ADAPTIVE_TEMPERATURE": "experimental preference-elicitation tuning, not deployment configuration",
     "ADAPTIVE_UNCERTAINTY_THRESHOLD": "experimental preference-elicitation tuning, not deployment configuration",
     "ADAPTIVE_VARIANCE_THRESHOLD": "experimental preference-elicitation tuning, not deployment configuration",
+    # The two below are read only when INGRESS_MODE is "direct", which is the on-premise shape:
+    # the backend verifies Firebase ID tokens and API keys itself because there is no gateway in
+    # front of it. A cloud deployment runs in "gateway" mode, the default, where the Google API
+    # Gateway does that verification and `validate_ingress_config` returns before either is
+    # read. Delivering them would be configuring a code path this deployment shape never enters.
+    "FIREBASE_PROJECT_ID": "only read when INGRESS_MODE is 'direct' (on-premise); a cloud "
+                           "deployment runs behind the API Gateway, which verifies tokens itself",
+    "API_KEYS": "only read when INGRESS_MODE is 'direct' (on-premise); a cloud deployment runs "
+                "behind the API Gateway, which verifies API keys itself",
 }
 
 
