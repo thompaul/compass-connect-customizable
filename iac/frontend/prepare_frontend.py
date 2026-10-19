@@ -72,7 +72,8 @@ def download_frontend_bundle(
 
     # the generic repository name is defined in iac/realm/create_realm:_create_repositories method body
     # if it is not there python will raise `KeyError`, a good thing.
-    realm_generic_repository = realm_outputs["generic_repository"].value
+    # The frontend bundle is the product, not this deployment's.
+    realm_generic_repository = realm_outputs["product_generic_repository"].value
 
     print(f"Downloading the frontend build bundle... to {artifacts_destination_dir}")
 

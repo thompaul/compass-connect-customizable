@@ -32,7 +32,10 @@ def main():
 
     billing_account = getstackref(realm_reference, "billing_account_id", True)
     root_project_id = getstackref(realm_reference, "root_project_id")
-    docker_repository = getstackref(realm_reference, "docker_repository")
+    # The image the backend runs is the product. It comes from wherever the realm says the
+    # product is published, which is the realm's own repository unless a publisher was
+    # configured - so an unconfigured realm behaves exactly as before.
+    docker_repository = getstackref(realm_reference, "product_docker_repository")
     base_domain_name = getstackref(realm_reference, "base_domain_name")
 
     # if the environment is prod, use the compass upper folder, otherwise use the compass lower folder

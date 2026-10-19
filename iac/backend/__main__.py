@@ -37,6 +37,14 @@ def main():
     # Get stack references
     env_reference = get_stack_reference(module="environment", stack_name=stack_name)
     docker_repository = getstackref(env_reference, "docker_repository")
+    # Whether that repository belongs to this realm.
+    #
+    # Read from this stack's own configuration rather than from the realm's exports, because
+    # it has to be a Python bool. A stack reference yields a pulumi Output, and an Output is
+    # truthy whatever it wraps - so `if external:` would take the same branch either way, and
+    # the resource this governs cannot be created inside an `.apply()`.
+    product_artifacts_are_external = getconfig(
+        "product_artifacts_are_external", default="false").strip().lower() == "true"
     project = getstackref(env_reference, "project_id")
     project_number = getstackref(env_reference, "project_number")
     environment_type = getstackref(env_reference, "environment_type")
@@ -146,6 +154,7 @@ def main():
         backend_service_cfg=backend_service_cfg,
         docker_repository=docker_repository,
         deployable_version=deployable_version,
+        product_artifacts_are_external=product_artifacts_are_external,
     )
 
 

@@ -7,6 +7,7 @@ import pulumiverse_time as time
 import hashlib
 
 from lib import enable_services, get_resource_name
+from lib.std_pulumi import getconfig
 
 protected_from_deletion = True
 
@@ -621,6 +622,47 @@ def create_realm(*,
 
     pulumi.export("docker_repository", docker_repository)
     pulumi.export("generic_repository", generic_repository)
+
+    # Where this realm's deployments fetch the *product's* artifacts from, as distinct from
+    # their own.
+    #
+    # Two different things travel through artifact repositories and they have different owners.
+    # The container image and the two frontend bundles are the product: Tabiya builds them, and
+    # every deployment runs the same bytes. The branding archive is the deployment's own: the
+    # operator builds it from their `assets/` directory and nobody else has a copy. Until now
+    # both came from this realm's repositories, which is why a partner had to build the product
+    # themselves - there was nowhere else for it to come from.
+    #
+    # `product_artifacts_project` points the product half somewhere else. Left unset, it is this
+    # realm's own root project and nothing changes, which is what every existing deployment
+    # gets. Set to a project that publishes the product publicly, the partner stops building
+    # what they did not write.
+    #
+    # The repository *names* are fixed rather than configurable because they are this codebase's
+    # own convention, created by the lines above; a publisher following it needs to supply one
+    # value rather than three.
+    product_artifacts_project = getconfig(
+        "gcp_product_artifacts_project", default=root_project_id)
+
+    pulumi.export("product_docker_repository", {
+        "name": "docker-repository", "location": region, "project": product_artifacts_project})
+    pulumi.export("product_generic_repository", {
+        "name": "generic-repository", "location": region, "project": product_artifacts_project})
+
+    # Whether the product comes from somewhere this realm does not own.
+    #
+    # Exported as a decided fact rather than left for a downstream stack to work out by
+    # comparing two project ids. Both are plain strings here and the comparison is free; in the
+    # backend stack they are Pulumi Outputs, where comparing them means an `apply`, and a
+    # resource cannot be conditionally created inside one.
+    #
+    # What it governs: the backend grants its service agent read access on the repository it
+    # pulls from, which is a write to that repository's IAM policy. That write is fine on a
+    # repository this realm owns and impossible on one it does not. A published product
+    # repository is expected to be readable without a grant - which is the reason to publish it
+    # publicly rather than to maintain a grant per partner.
+    pulumi.export("product_artifacts_are_external",
+                  product_artifacts_project != root_project_id)
     pulumi.export("lower_env_folder_id", lower_envs_folder.folder_id)
     pulumi.export("environments_config_secret_name", environments_config_secret.name)
     pulumi.export("lower_env_google_oauth_projects_folder_id", lower_env_google_oauth_projects_folder_id)

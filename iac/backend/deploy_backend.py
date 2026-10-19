@@ -643,6 +643,7 @@ def deploy_backend(
         backend_service_cfg: BackendServiceConfig,
         docker_repository: pulumi.Output[gcp.artifactregistry.Repository],
         deployable_version: Version,
+        product_artifacts_are_external: bool = False,
 ):
     """
     Deploy the backend infrastructure
@@ -659,14 +660,27 @@ def deploy_backend(
         git_sha=deployable_version.git_sha
     )
 
-    # grant the project service account access to the docker repository so that it can pull images
-    membership = _grant_docker_repository_access_to_project_service_account(
-        basic_config,
-        project_number,
-        docker_repository.apply(lambda repo: repo.get("project")),
-        docker_repository.apply(lambda repo: repo.get("name")),
-        docker_repository.apply(lambda repo: repo.get("location")),
-    )
+    # Grant the project's service agent read access on the repository it pulls images from,
+    # unless that repository belongs to somebody else.
+    #
+    # The grant is a write to the repository's IAM policy. On a repository this realm owns that
+    # is correct and necessary. On a product repository published by someone else it is a write
+    # we have no right to make, and attempting it fails the deployment on a permission error
+    # that says nothing about why - so a realm configured to pull a published product skips it,
+    # and the published repository is expected to be readable without one.
+    if product_artifacts_are_external:
+        pulumi.info(
+            "The product's images come from a repository this realm does not own, so no reader "
+            "grant is made. The repository must already allow this deployment to pull.")
+        membership = None
+    else:
+        membership = _grant_docker_repository_access_to_project_service_account(
+            basic_config,
+            project_number,
+            docker_repository.apply(lambda repo: repo.get("project")),
+            docker_repository.apply(lambda repo: repo.get("name")),
+            docker_repository.apply(lambda repo: repo.get("location")),
+        )
 
     # get fully qualified image name
     fully_qualified_image_name = _get_fully_qualified_image_name(
@@ -682,7 +696,7 @@ def deploy_backend(
         basic_config=basic_config,
         fully_qualified_image_name=fully_qualified_image_name,
         backend_service_cfg=backend_service_cfg,
-        dependencies=[membership, cv_bucket],
+        dependencies=[d for d in (membership, cv_bucket) if d is not None],
         cv_bucket_name=cv_bucket.name,
     )
 

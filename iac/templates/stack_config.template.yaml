@@ -19,6 +19,19 @@ backend:
     # The region where resources will be deployed
     gcp:region: <region>
 
+    # Whether the product's container image comes from a repository this realm does not own.
+    #
+    # Leave unset for a realm that builds its own images, which is the default and what every
+    # existing deployment does. Set to "true" only when the realm's
+    # gcp_product_artifacts_project points at a project belonging to the product's publisher:
+    # the deployment then skips granting itself read access, because writing to somebody else's
+    # IAM policy is not something it can do, and a published repository is expected to be
+    # readable without a grant.
+    #
+    # This must agree with the realm's gcp_product_artifacts_project. They are separate settings
+    # because this one has to be a plain value in this stack rather than a pulumi Output.
+    product_artifacts_are_external: /.*/
+
     ############################
     # Cloud Run settings
     # See the pulumi documentation https://www.pulumi.com/registry/packages/gcp/api-docs/cloudrunv2/service/#inputs for more details.

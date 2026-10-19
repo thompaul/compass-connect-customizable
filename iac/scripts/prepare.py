@@ -53,7 +53,10 @@ def _download_templates(*,
     )
 
     realm_outputs = get_pulumi_stack_outputs(stack_name=realm_name, module="realm")
-    realm_generic_repository = realm_outputs["generic_repository"].value
+    # The product's own artifacts: templates and the two frontend bundles. These come from
+    # wherever the realm says the product is published, which is its own repository unless a
+    # publisher was configured.
+    realm_generic_repository = realm_outputs["product_generic_repository"].value
 
     current_templates_dir = construct_artifacts_dir(
         deployment_number=deployment_number,
@@ -94,6 +97,9 @@ def _download_branding_assets(*, realm_name: str, stack_name: str, version: Vers
         git_sha=version.git_sha,
     )
     realm_outputs = get_pulumi_stack_outputs(stack_name=realm_name, module="realm")
+    # Deliberately the realm's own, not the product's. This archive is the deployment's
+    # branding, uploaded by its own operator in `setup_env.py`; the publisher of the
+    # product has never seen it and must not be asked for it.
     generic_repository = realm_outputs["generic_repository"].value
 
     archive_name = branding_archive_name(stack_name)
