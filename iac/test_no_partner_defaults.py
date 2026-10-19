@@ -341,6 +341,65 @@ def test_the_shipped_defaults_do_not_turn_the_sector_hub_on():
     assert hub.get("sectors") == [], "the shipped defaults name somebody's sectors"
 
 
+
+# Broader than PARTNER_TERMS, and only applied to continuous integration.
+#
+# PARTNER_TERMS is the list this file was written for: one partner, whose values had been left
+# where the defaults go. It knows nothing about the others this codebase has accumulated, and
+# widening it everywhere would trip on content that is legitimately a Zambian deployment's.
+#
+# Continuous integration is different. It is inherited by every fork, it should name no
+# deployment at all, and a false positive costs one exemption rather than a day of triage.
+CI_PARTNER_TERMS = PARTNER_TERMS + ("zambia", "teveta", "tevet", "kenya", "empujar", "njila")
+
+
+def test_no_workflow_names_a_partner():
+    """
+    The continuous integration is shared by every deployment, and it named two partners.
+
+    `main.yml` decided whether to publish artifacts by comparing the branch against
+    `feat/zambia-working-branch`, in five places, and deployed to `dev-njila` — one partner's
+    working branch and another partner's environment, in the file every fork of this
+    repository inherits. A fork that pushed to its own default branch would have deployed into
+    somebody else's environment.
+
+    Both are configuration: which branches publish, and which environment this repository
+    deploys to, are answers that differ per repository and belong in repository variables.
+    """
+    workflows = os.path.join(_REPO, ".github", "workflows")
+    if not os.path.isdir(workflows):
+        return
+
+    offenders = []
+    for name in sorted(os.listdir(workflows)):
+        if not name.endswith((".yml", ".yaml")):
+            continue
+        text = open(os.path.join(workflows, name), encoding="utf-8").read().lower()
+        for term in CI_PARTNER_TERMS:
+            if term in text:
+                offenders.append(f"{name} names '{term}'")
+
+    assert not offenders, (
+        "continuous integration shared by every deployment names a partner:\n    "
+        + "\n    ".join(offenders)
+        + "\nWhich branches publish, and which environment is deployed to, are repository "
+          "variables rather than values in a file every fork inherits.")
+
+
+def test_a_fork_that_configures_nothing_deploys_nowhere():
+    """
+    The deploy job used to run whenever the branch matched, against an environment named in
+    the file. A repository that has not said which environment is its own must build and
+    publish without deploying, rather than deploying into whichever one was written here.
+    """
+    main_yml = os.path.join(_REPO, ".github", "workflows", "main.yml")
+    if not os.path.exists(main_yml):
+        return
+    text = open(main_yml, encoding="utf-8").read()
+    assert "vars.CI_DEPLOY_ENV_NAME != ''" in text, (
+        "main.yml deploys without checking that this repository has an environment of its "
+        "own, so a fork deploys wherever the file happens to point")
+
 if __name__ == "__main__":
     _failed = 0
     for _name, _test in sorted(globals().items()):

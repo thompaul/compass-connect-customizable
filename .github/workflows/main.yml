@@ -16,32 +16,35 @@ jobs:
     uses: ./.github/workflows/frontend-ci.yml
     secrets: inherit
     with:
-      upload-artifacts: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/zambia-working-branch' || contains(github.event.head_commit.message, '[pulumi up]'))) }}
+      upload-artifacts: ${{ (github.event_name == 'push' && (github.ref_name == github.event.repository.default_branch || contains(fromJSON(vars.ARTIFACT_UPLOAD_BRANCHES || '[]'), github.ref_name) || contains(github.event.head_commit.message, '[pulumi up]'))) }}
 
   admin-frontend-ci:
     uses: ./.github/workflows/admin-frontend-ci.yml
     secrets: inherit
     with:
-      upload-artifacts: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/zambia-working-branch' || contains(github.event.head_commit.message, '[pulumi up]'))) }}
+      upload-artifacts: ${{ (github.event_name == 'push' && (github.ref_name == github.event.repository.default_branch || contains(fromJSON(vars.ARTIFACT_UPLOAD_BRANCHES || '[]'), github.ref_name) || contains(github.event.head_commit.message, '[pulumi up]'))) }}
 
   backend-ci:
     uses: ./.github/workflows/backend-ci.yml
     secrets: inherit
     with:
-      upload-artifacts: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/zambia-working-branch'  || contains(github.event.head_commit.message, '[pulumi up]'))) }}
+      upload-artifacts: ${{ (github.event_name == 'push' && (github.ref_name == github.event.repository.default_branch || contains(fromJSON(vars.ARTIFACT_UPLOAD_BRANCHES || '[]'), github.ref_name) || contains(github.event.head_commit.message, '[pulumi up]'))) }}
 
   config-ci:
     uses: ./.github/workflows/config-ci.yml
     secrets: inherit
-    if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/zambia-working-branch'  || contains(github.event.head_commit.message, '[pulumi up]'))) }}
+    if: ${{ (github.event_name == 'push' && (github.ref_name == github.event.repository.default_branch || contains(fromJSON(vars.ARTIFACT_UPLOAD_BRANCHES || '[]'), github.ref_name) || contains(github.event.head_commit.message, '[pulumi up]'))) }}
 
+  # Deploys only where a repository has said which environment is its own. A fork that
+  # sets nothing builds and publishes but deploys nowhere, rather than deploying into
+  # whichever environment happened to be named in this file.
   deploy:
     needs: [ frontend-ci, admin-frontend-ci, backend-ci, config-ci ]
-    if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/zambia-working-branch'  || contains(github.event.head_commit.message, '[pulumi up]'))) }}
+    if: ${{ vars.CI_DEPLOY_ENV_NAME != '' && (github.event_name == 'push' && (github.ref_name == github.event.repository.default_branch || contains(fromJSON(vars.ARTIFACT_UPLOAD_BRANCHES || '[]'), github.ref_name) || contains(github.event.head_commit.message, '[pulumi up]'))) }}
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     with:
-      env-name: dev-njila
-      env-type: dev
+      env-name: ${{ vars.CI_DEPLOY_ENV_NAME }}
+      env-type: ${{ vars.CI_DEPLOY_ENV_TYPE }}
       target-git-sha: ${{ github.sha }}
       target-git-branch: ${{ github.ref_name }}
