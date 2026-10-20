@@ -32,6 +32,7 @@ parse_env = _module.parse_env
 assemble = _module.assemble
 secrets_in = _module.secrets_in
 required_secret_names = _module.required_secret_names
+render_env = _module.render_env
 
 # Names that are credentials whatever they are called. Not the declaration — a second opinion,
 # so that a credential added under a new name is noticed rather than waved through.
@@ -269,6 +270,54 @@ def test_a_multi_line_value_is_written_back_the_way_it_was_read():
             os.remove(second)
     finally:
         os.remove(path)
+
+
+def test_a_multi_line_credential_injected_as_a_variable_is_quoted_on_the_way_out():
+    """
+    The RSA key reached the deployment as a GitHub secret rather than in the file, and
+    environment variables have no quoting convention - so it arrived as nine bare lines.
+    Written back unquoted, the eight after the first each read as a new assignment:
+
+        warning: env.MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwLurLSHCHirJtYfbPD1k
+                 is not in the template configuration
+
+    Same defect `parse_env` documents, from the other side: it dropped lines coming in, this
+    dropped them going out. The round trip hid it both times, because the damage shows up
+    somewhere else - in a validator, naming base64 as a configuration key.
+    """
+    pem = ("-----BEGIN PUBLIC KEY-----\n"
+           "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwLurLSHCHirJtYfb\n"
+           "GQIDAQAB\n"
+           "-----END PUBLIC KEY-----")
+
+    rendered = render_env({"RSA_KEY": pem, "AFTER": "still-a-value"})
+
+    # Every line after the first must be inside the value, not loose in the file.
+    assignments = [l for l in rendered.splitlines() if "=" in l and not l.startswith(" ")]
+    assert "AFTER=still-a-value" in rendered, "the value after it was lost"
+
+    with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
+        f.write(rendered)
+        path = f.name
+    try:
+        back = parse_env(path)
+    finally:
+        os.remove(path)
+
+    assert back["AFTER"] == "still-a-value"
+    assert back["RSA_KEY"].strip('"') == pem, (
+        f"the key did not survive the round trip: {len(back['RSA_KEY'].splitlines())} lines "
+        f"back, {len(pem.splitlines())} expected")
+    assert len(back) == 2, (
+        f"writing it produced {len(back)} assignments instead of 2; the lines of the key are "
+        f"being read as configuration keys: {sorted(back)}")
+
+
+def test_a_multi_line_value_already_quoted_is_not_quoted_twice():
+    """A value read from a file keeps its quotes, and re-quoting would change the bytes."""
+    quoted = '"line one\nline two"'
+    rendered = render_env({"FROM_FILE": quoted})
+    assert rendered == 'FROM_FILE="line one\nline two"\n', rendered
 
 
 def test_an_unterminated_quote_is_refused_rather_than_truncated():

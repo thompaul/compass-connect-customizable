@@ -162,13 +162,42 @@ def assemble(*, config_values: Dict[str, str], secret_values: Dict[str, str],
     return assembled, missing
 
 
+def _rendered(name: str, value: str) -> str:
+    """
+    One value, quoted if it has to be to survive being written and read back.
+
+    A value read from a file arrives with its quotes still attached - `parse_env` keeps them -
+    so writing `NAME=value` restores exactly what was there, and re-quoting would change bytes
+    something downstream parses.
+
+    **A value injected as an environment variable has no quotes**, because environment
+    variables have no quoting convention. For a credential that spans lines - this deployment's
+    RSA key is a nine-line PEM block - writing it unquoted produces a file where the eight
+    remaining lines each read as a new assignment:
+
+        warning: env.MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwLurLSHCHirJtYfbPD1k
+                 is not in the template configuration
+
+    This is the same defect as the one `parse_env` documents, arriving from the other side: it
+    dropped lines on the way in, and this dropped them on the way out. The round trip hid it
+    both times, because a file written unquoted and read by a reader that expects quotes fails
+    somewhere else entirely - in a validator, against a template, naming base64 as a key.
+    """
+    if "\n" not in value:
+        return value
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value
+    if '"' not in value:
+        return f'"{value}"'
+    if "'" not in value:
+        return f"'{value}'"
+    raise ValueError(
+        f"{name} spans lines and contains both kinds of quote, so it cannot be written to an "
+        f"env file without an escaping convention this format does not have.")
+
+
 def render_env(values: Dict[str, str]) -> str:
     """
     The assembled environment, in the form the rest of the deployment already reads.
-
-    A value that spans lines is written back spanning lines, quotes and all, because it was
-    read that way: `parse_env` keeps the quotes in the value, so writing `NAME=value` restores
-    exactly what was there. Re-quoting or escaping here would change bytes that something
-    downstream parses.
     """
-    return "".join(f"{name}={value}\n" for name, value in values.items())
+    return "".join(f"{name}={_rendered(name, value)}\n" for name, value in values.items())
