@@ -193,6 +193,39 @@ def test_dns_delegation_defaults_to_not_touching_another_account():
         "sets nothing could try to write NS records into a zone it does not own")
 
 
+def test_the_deploy_checks_out_the_product_not_whoever_called_it():
+    """
+    `actions/checkout` defaults to the repository that *started the run*. In a called
+    workflow that is the caller, not the repository the workflow file came from - so a
+    partner calling this workflow had it try to fetch the product's commit out of their own
+    configuration repository:
+
+        fatal: remote error: upload-pack: not our ref 9d0c9b12...
+
+    The default is invisible here, where the caller and the product are the same repository.
+    It is wrong for every other caller, which is every partner.
+    """
+    doc = _load("deploy.yml")
+    steps = doc["jobs"]["deploy"]["steps"]
+    checkout = [s for s in steps if str(s.get("uses", "")).startswith("actions/checkout")]
+    assert checkout, "deploy.yml has no checkout step"
+
+    named = checkout[0].get("with", {}).get("repository")
+    assert named, (
+        "the product checkout does not name a repository, so it takes the caller's - a "
+        "partner's configuration repository, which does not contain the product")
+    assert "inputs.product-repository" in str(named), (
+        "the product checkout does not let a caller name the product repository, so only a "
+        "caller that *is* the product repository can use this workflow")
+
+    inputs = _triggers(doc).get("workflow_call", {}).get("inputs", {})
+    assert "product-repository" in inputs, (
+        "workflow_call does not accept product-repository, so a partner has no way to pass it")
+    assert inputs["product-repository"].get("required") is not True, (
+        "making product-repository required would break every existing caller, which is "
+        "exactly the kind of change this input exists to avoid")
+
+
 if __name__ == "__main__":
     _failed = 0
     for _name, _test in sorted(globals().items()):

@@ -33,6 +33,15 @@ on:
 
   workflow_call:
     inputs:
+      # The repository holding the product. A caller that is not this repository must name it,
+      # because `actions/checkout` in a called workflow defaults to the *caller's* repository,
+      # not the one the workflow file came from. Defaulting to `github.repository` keeps the
+      # behaviour identical for a deploy run from this repository.
+      product-repository:
+        required: false
+        type: string
+        default: ''
+        description: 'Repository holding the product; defaults to the calling repository'
       # env-type and env-name are mutually exclusive
       env-type:
         required: false
@@ -56,9 +65,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # 1. checkout.
+      #
+      # `repository` is named rather than left to default. In a called workflow the default is
+      # the *calling* repository, not the repository this file lives in - so a partner calling
+      # this workflow had it try to fetch the product's commit from their own configuration
+      # repository, and fail with "upload-pack: not our ref". The default is invisible here,
+      # where the caller and the product are the same repository, and wrong everywhere else.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          repository: ${{ inputs.product-repository || github.repository }}
           ref: ${{ inputs.target-git-sha }}
 
       - name: Setup python
