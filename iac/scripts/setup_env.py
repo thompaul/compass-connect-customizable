@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import tempfile
 import sys
 import argparse
 from datetime import date
@@ -11,6 +12,7 @@ from google.api_core.exceptions import NotFound
 
 # Determine the absolute path to the 'iac' directory
 libs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+base_templates_dir = os.path.join(libs_dir, "templates")
 # Add this directory to sys.path,
 # so that we can import the iac/lib module when we run pulumi from withing the iac/scripts directory.
 sys.path.insert(0, libs_dir)
@@ -18,6 +20,8 @@ sys.path.insert(0, libs_dir)
 from _types import IaCModules
 from scripts.formatters import construct_artifacts_version, construct_secret_id
 from lib import get_stack_name_from, MAIN_SECRET_VERSION, ENV_VARS_SECRET_PREFIX, STACK_CONFIG_SECRET_PREFIX, Version
+from lib.deployment_env import assemble, declared_secret_names, parse_env, \
+    render_env, required_secret_names, secrets_in
 from lib.branding_assets import ASSETS_DIRECTORY_NAME, branding_archive_name, pack_assets, \
     upload_generic_artifacts_file
 from lib import get_pulumi_stack_outputs
@@ -145,6 +149,11 @@ def _main(*, realm_name: str, env_name: str, target_git_branch: str, target_git_
     if not os.path.exists(env_file_path):
         raise FileNotFoundError(f"Environment file {env_file_path} does not exist.")
 
+    # The credentials, which the committable file does not carry. A sibling `.secrets` file, or
+    # the environment, or both; a pipeline injects them as environment variables so that
+    # nothing has to write them to disk beside the configuration.
+    secrets_file_path = env_file_path + ".secrets"
+
     stack_config_file_path = os.path.join(config_files_dir, f"stack_config.{realm_name}.{env_name}.yaml")
     if not os.path.exists(stack_config_file_path):
         raise FileNotFoundError(f"Stack config file {stack_config_file_path} does not exist.")
@@ -173,15 +182,62 @@ def _main(*, realm_name: str, env_name: str, target_git_branch: str, target_git_
         module=IaCModules.ENVIRONMENT
     )
 
-    # 4. Uploading the .env file to the secret manage given the target version.
+    # 4. Assemble the environment from its two halves and upload it.
+    #
+    # The configuration and the credentials are separate files - or a file and a pipeline's
+    # environment - so that the configuration can live in a repository. They are joined here,
+    # once, on the way to Secret Manager, which is where a complete environment has always
+    # gone and the only place it exists as one document.
     project_number = up_results.outputs["project_number"].value
-    _upload_file_to_secret_manager(
-        project_number=project_number,
-        secret_prefix=ENV_VARS_SECRET_PREFIX,
-        file_path=env_file_path,
-        version=target_version,
-        expire_time=secrets_expire_time
+
+    secret_names = declared_secret_names(base_templates_dir)
+    config_values = parse_env(env_file_path)
+    secret_values = parse_env(secrets_file_path) if os.path.exists(secrets_file_path) else {}
+
+    assembled, missing = assemble(
+        config_values=config_values,
+        secret_values=secret_values,
+        environment=dict(os.environ),
+        secret_names=secret_names,
+        # Declared-secret and required are different: a deployment using one LLM provider
+        # leaves the others' credentials empty on purpose. The template says which is which.
+        required_names=required_secret_names(base_templates_dir),
     )
+
+    if missing:
+        print(f"error: {len(missing)} credential(s) have no value. Each is declared in "
+              f"iac/templates/secret-variables.txt and must come from "
+              f"{os.path.basename(secrets_file_path)} or from the environment:")
+        for name in missing:
+            print(f"    {name}")
+        exit(1)
+
+    carried_in_config = secrets_in(config_values, secret_names)
+    if carried_in_config:
+        print(f"warning: {len(carried_in_config)} credential(s) are in "
+              f"{os.path.basename(env_file_path)}, which is the file meant to be committable. "
+              f"They are being used, and they should move to "
+              f"{os.path.basename(secrets_file_path)}:")
+        for name in carried_in_config:
+            print(f"    {name}")
+
+    # The one moment a complete environment exists on this machine. It is written readable
+    # only by this user, into the system temporary directory rather than beside the
+    # configuration, and removed as soon as it has been uploaded - including when the upload
+    # fails, which is when a forgotten file is most likely to be left behind.
+    handle, assembled_path = tempfile.mkstemp(prefix=f"env.{stack_name}.", suffix=".assembled")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as assembled_file:
+            assembled_file.write(render_env(assembled))
+        _upload_file_to_secret_manager(
+            project_number=project_number,
+            secret_prefix=ENV_VARS_SECRET_PREFIX,
+            file_path=assembled_path,
+            version=target_version,
+            expire_time=secrets_expire_time
+        )
+    finally:
+        os.remove(assembled_path)
 
     # 5. Upload the stack config file to the secret manager.
     _upload_file_to_secret_manager(
