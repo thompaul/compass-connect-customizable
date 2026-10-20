@@ -118,9 +118,39 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           PULUMI_ORG: ${{ vars.PULUMI_ORG }}
 
-      # 3. setup AWS.
+      # 3. setup AWS - only for a deployment that delegates its DNS in Route53.
+
+      # AWS credentials are needed for exactly one thing: creating NS records in a parent
+      # Route53 zone, which `iac/dns` does only when `dns:delegation_provider` is "route53".
+      # That setting defaults to "none", because the parent zone is usually held by a
+      # different team in a different account. A deployment that delegates its DNS by hand
+      # therefore declares no AWS resource at all - and yet, unconditionally, this job used
+      # to demand AWS credentials and fail without them. The deploy was gated on access to
+      # someone else's account that it was never going to use.
+      #
+      # The signal used here is whether the credentials were supplied. If a deployment has
+      # them it configures them; if it has none it skips the step and deploys as before.
+      # Note this cannot be a plain `if: secrets.* != ''` - the `secrets` context is not
+      # available in a step-level `if`, so the value is read into a scoped `env` first, and
+      # only in this step, rather than broadcast to every step in the job.
+      - name: Check whether this deployment delegates DNS in Route53
+        id: aws_delegation
+        env:
+          AWS_DNS_UPDATE_ACCESS_KEY: ${{ secrets.AWS_DNS_UPDATE_ACCESS_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${AWS_DNS_UPDATE_ACCESS_KEY:-}" ]; then
+            echo "configure=true" >> "$GITHUB_OUTPUT"
+            echo "AWS credentials supplied; configuring them for Route53 delegation."
+          else
+            echo "configure=false" >> "$GITHUB_OUTPUT"
+            echo "No AWS credentials supplied; skipping. This is correct for a deployment"
+            echo "whose dns:delegation_provider is 'none', which is the default."
+          fi
 
       - name: Configure AWS Credentials
+        if: steps.aws_delegation.outputs.configure == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_DNS_UPDATE_ACCESS_KEY }}

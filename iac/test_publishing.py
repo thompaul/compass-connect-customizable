@@ -155,6 +155,44 @@ def test_the_deploy_refuses_rather_than_guessing_an_organisation():
         "deploy.yml does not stop when no organisation is configured, so it would deploy "
         "into whichever one a default happened to name")
 
+
+def test_the_deploy_does_not_demand_credentials_it_will_not_use():
+    """
+    AWS credentials are needed for one thing: NS records in a parent Route53 zone, which
+    `iac/dns` creates only when `dns:delegation_provider` is "route53". The default is
+    "none", so a deployment that delegates its DNS by hand declares no AWS resource at all.
+
+    The step that configured those credentials was unconditional, so such a deployment
+    failed before running a single deployment script - gated on access to an account it was
+    never going to touch. The step must be skippable.
+    """
+    doc = _load("deploy.yml")
+    steps = doc["jobs"]["deploy"]["steps"]
+
+    configure = [s for s in steps if "configure-aws-credentials" in str(s.get("uses", ""))]
+    assert len(configure) == 1, "expected exactly one AWS credential step in deploy.yml"
+    assert configure[0].get("if"), (
+        "the AWS credential step is unconditional, so a deployment that delegates its DNS "
+        "by hand cannot deploy without credentials for a zone it never writes to")
+
+    # The `secrets` context is not available in a step-level `if`, so a guard written the
+    # obvious way silently evaluates to the empty string and skips the step always.
+    assert "secrets." not in configure[0]["if"], (
+        "the guard reads the `secrets` context, which GitHub does not provide to a "
+        "step-level `if`; it would evaluate empty and skip the step even when credentials "
+        "were supplied. Read the secret into a scoped `env` in an earlier step instead.")
+
+
+def test_dns_delegation_defaults_to_not_touching_another_account():
+    """The default must stay "none": the parent zone usually belongs to someone else."""
+    dns_main = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "dns", "__main__.py")
+    text = open(dns_main).read()
+    assert 'getconfig("delegation_provider", default="none")' in text, (
+        "iac/dns no longer defaults delegation_provider to 'none', so a deployment that "
+        "sets nothing could try to write NS records into a zone it does not own")
+
+
 if __name__ == "__main__":
     _failed = 0
     for _name, _test in sorted(globals().items()):
