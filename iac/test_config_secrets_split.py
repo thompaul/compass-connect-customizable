@@ -17,6 +17,7 @@ import importlib.util
 import os
 import re
 import sys
+import tempfile
 
 _IAC = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATES = os.path.join(_IAC, "templates")
@@ -204,6 +205,91 @@ def test_a_required_credential_that_is_present_and_empty_is_missing():
     assert missing == ["APPLICATION_MONGODB_URI"], (
         "an empty required credential was accepted, so the deployment starts and fails against "
         "a database it cannot reach")
+
+
+# A value that spans lines, which is what every fixture above lacked. The RSA key this
+# deployment encrypts personal data with is exactly this shape.
+_PEM_ENV = '''GLOBAL_PRODUCT_NAME=Acme
+SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY="-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAexample
+0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNO
+-----END PUBLIC KEY-----"
+BACKEND_ENABLE_SENTRY=false
+'''
+
+
+def test_a_value_that_spans_lines_survives_being_read():
+    """
+    The defect that broke a live configuration, and the reason this fixture exists.
+
+    A line-based reader matches the first line of a quoted PEM, takes the text after the `=`,
+    and silently drops the remaining lines - producing a truncated key and a file that no
+    longer parses. Every fixture in this file was single-line, so none of them could have
+    caught it; it was found by splitting a real deployment and watching the deploy refuse.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
+        f.write(_PEM_ENV)
+        path = f.name
+    try:
+        values = parse_env(path)
+        assert set(values) == {"GLOBAL_PRODUCT_NAME",
+                               "SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY",
+                               "BACKEND_ENABLE_SENTRY"}, (
+            f"the reader lost or invented variables around a multi-line value: {sorted(values)}")
+        key = values["SENSITIVE_PERSONAL_DATA_RSA_ENCRYPTION_KEY"]
+        assert "END PUBLIC KEY" in key, (
+            "the key was truncated at its first line, which is a silently broken credential")
+        # Four: the opening-quoted BEGIN line, two of body, and the END line closing the quote.
+        assert len(key.splitlines()) == 4, (
+            f"expected the whole block, got {len(key.splitlines())} lines")
+        assert values["BACKEND_ENABLE_SENTRY"] == "false", (
+            "the variable after a multi-line value was swallowed by it")
+    finally:
+        os.remove(path)
+
+
+def test_a_multi_line_value_is_written_back_the_way_it_was_read():
+    """
+    Reading it correctly is half of it. If rendering re-quotes or escapes, the bytes the
+    backend receives differ from the bytes that worked.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
+        f.write(_PEM_ENV)
+        path = f.name
+    try:
+        once = parse_env(path)
+        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as g:
+            g.write(_module.render_env(once))
+            second = g.name
+        try:
+            assert parse_env(second) == once, (
+                "a multi-line value does not survive a write-then-read, so an assembled "
+                "environment differs from the one it replaces")
+        finally:
+            os.remove(second)
+    finally:
+        os.remove(path)
+
+
+def test_an_unterminated_quote_is_refused_rather_than_truncated():
+    """
+    Keeping what there is would write half a credential into a deployment. `gh secret set`
+    refuses the same input for the same reason.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
+        f.write('A_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkq\n')
+        path = f.name
+    try:
+        try:
+            parse_env(path)
+        except ValueError as e:
+            assert "A_KEY" in str(e), "the refusal does not name the variable at fault"
+        else:
+            raise AssertionError(
+                "a value whose quote is never closed was accepted, so a truncated credential "
+                "reaches the deployment")
+    finally:
+        os.remove(path)
 
 if __name__ == "__main__":
     _failed = 0

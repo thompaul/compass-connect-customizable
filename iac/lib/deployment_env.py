@@ -40,18 +40,55 @@ def parse_env(path: str) -> Dict[str, str]:
     """
     The assignments in an env file, as names to values.
 
-    Deliberately simple, and the same shape `dotenv_values` would give: these files are written
-    by `inject-config.py` and by operators, not by a shell.
+    **A value can span lines.** This deployment's RSA encryption key is a PEM block of nine
+    lines inside double quotes, and a line-based reader silently keeps the first line and
+    discards the rest - producing a truncated private key and a file that no longer parses.
+    That is not a hypothetical: it is what the first version of this function did, and the
+    round-trip test did not catch it because it compared two dictionaries built by this same
+    reader, so both sides lost the same eight lines and matched perfectly.
+
+    So the rule is: if a value opens with a quote and does not close it on the same line, the
+    following lines belong to it until the closing quote. Everything else is one line, as
+    before.
     """
     values: Dict[str, str] = {}
+    pending_name = None
+    pending_lines: List[str] = []
+    quote = ""
+
     with open(path, encoding="utf-8") as env_file:
-        for line in env_file:
-            line = line.rstrip("\n")
-            if not line or line.lstrip().startswith("#"):
+        for raw in env_file:
+            line = raw.rstrip("\n")
+
+            if pending_name is not None:
+                pending_lines.append(line)
+                if line.rstrip().endswith(quote):
+                    values[pending_name] = "\n".join(pending_lines)
+                    pending_name, pending_lines, quote = None, [], ""
                 continue
+
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+
             match = _ASSIGNMENT.match(line.lstrip())
-            if match:
-                values[match.group(1)] = match.group(2)
+            if not match:
+                continue
+
+            name, value = match.group(1), match.group(2)
+            opening = value[:1]
+            if opening in ('"', "'") and not (len(value) > 1 and value.rstrip().endswith(opening)):
+                # Opens a quote it does not close: the value continues on the next line.
+                pending_name, pending_lines, quote = name, [value], opening
+            else:
+                values[name] = value
+
+    if pending_name is not None:
+        # An unterminated quote. Keeping what there is would write a truncated credential into
+        # a deployment, which is the failure this function exists to prevent.
+        raise ValueError(
+            f"{path}: the value of {pending_name} opens with {quote} and never closes it, so "
+            f"it cannot be read without guessing where it ends")
+
     return values
 
 
@@ -126,5 +163,12 @@ def assemble(*, config_values: Dict[str, str], secret_values: Dict[str, str],
 
 
 def render_env(values: Dict[str, str]) -> str:
-    """The assembled environment, in the form the rest of the deployment already reads."""
+    """
+    The assembled environment, in the form the rest of the deployment already reads.
+
+    A value that spans lines is written back spanning lines, quotes and all, because it was
+    read that way: `parse_env` keeps the quotes in the value, so writing `NAME=value` restores
+    exactly what was there. Re-quoting or escaping here would change bytes that something
+    downstream parses.
+    """
     return "".join(f"{name}={value}\n" for name, value in values.items())
